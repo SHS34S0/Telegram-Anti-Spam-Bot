@@ -16,9 +16,12 @@ from aiogram import F
 from aiogram.types import ChatMemberUpdated
 import re
 from aiogram.exceptions import TelegramBadRequest
+from datetime import datetime, timedelta
+import time
 
 TOKEN = config.TOKEN
 ##########################################################
+
 
 async def tandem_id(db, c_id):  # преевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
@@ -51,6 +54,21 @@ def has_weird_chars(text):
     return False
 
 
+######
+async def check_join_date(db, user_id, channel_id):
+    c = await db.cursor()  # 1. Створили курсор
+    await c.execute(  # 2. Виконали запит через ЦЕЙ курсор
+        "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ? AND join_date >= datetime('now', '-2 minutes')",
+        (user_id, channel_id),
+    )
+    result = await c.fetchone()  # 3. Дістали результат
+    return result is not None
+    # if result:
+    #     return True
+    # else:
+    #     return False
+
+
 ###################################################################
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
 dp = Dispatcher()
@@ -67,10 +85,10 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
     full_name = event.new_chat_member.user.full_name
     username = event.new_chat_member.user.username  # Може бути None
 
-    #Якщо вступ був в чат ми шукаемо пару каналу ід і повертаємо канал ід 
+    # Якщо вступ був в чат ми шукаемо пару каналу ід і повертаємо канал ід
     # якщо вступ був в канал ми не знайдемо пару
     channel_id = await tandem_id(db, c_id)
-    if not channel_id:# пара не була знайдена
+    if not channel_id:  # пара не була знайдена
         # значить c_id має ід каналу
         channel_id = c_id
 
@@ -81,10 +99,19 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
         (user_id, full_name, username),
     )
     await db.execute(
-        "INSERT OR IGNORE INTO chat_stats (user_id, channel_id, join_date) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        """
+        INSERT INTO chat_stats (user_id, channel_id, join_date) 
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, channel_id) DO UPDATE SET join_date = CURRENT_TIMESTAMP
+        """,
         (user_id, channel_id),
     )
     await db.commit()
+
+
+# Замість INSERT OR IGNORE для статистики
+
+
 
 #####
 @dp.message(CommandStart())  # /start
@@ -97,7 +124,9 @@ async def command_start_handler(message: Message) -> None:
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
     if message.sender_chat:
         return  # Це пише канал або анонімний адмін, не чіпаємо його
-    
+    if message.new_chat_members or message.left_chat_member:
+        return
+
     ####################
     # Одразу витягуємо id
     u_id = message.from_user.id
@@ -123,7 +152,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 chat_id=c_id, user_id=message.from_user.id
             )
             if member_chat.status in ["administrator", "creator"]:
-                pass # все ок адмінам можна
+                pass  # все ок адмінам можна
             else:
                 member = await bot.get_chat_member(
                     chat_id=channel_id, user_id=message.from_user.id
@@ -132,8 +161,10 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     pass
                 else:
                     await message.delete()
+                    return  # Чат чистий, далі не йдемо
         except Exception:
             await message.delete()
+            return  # Чат чистий, далі не йдемо
 
     ###################початок
     # Запис або оновлення паспорта
@@ -158,15 +189,34 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 (u_id, channel_id),  # передаємо обидва параметри
             )
             await db.commit()
-            # після +1 до повідомлення продовжуемо преевірк
-            # запуск АНТИСПАМ ФУНКЦІЙ словники ітд
+            # після +1 до повідомлення починаємо преевірки
+            is_young = await check_join_date(db, u_id, channel_id)
+
+            if is_young:
+                if u_id > 6999999999:
+                    # Бан 24 години
+                    ban_until = int(time.time()) + 86400  # Надійніше через Unix-час
+                    await message.delete()
+                    await message.chat.ban(user_id=u_id, until_date=ban_until)
+                    print("Занадто молодий (7млрд+): бан 24 години")
+                    return  # рештиа не має сенсу
+                else:
+                    # Бан 1 година
+                    ban_until = int(time.time()) + 3600
+                    await message.delete()
+                    await message.chat.ban(user_id=u_id, until_date=ban_until)
+                    print("Занадто молодий (звичайний): бан 1 година")
+                    return  # рештиа не має сенсу
+            else:
+                print("Перевірка пройдена: підписаний довше ніж 2 хв")
+                pass
         else:  # в базі нема
             # Запит в тг чи підписаний НА КАНАЛ а не чат
             member = await bot.get_chat_member(
                 chat_id=channel_id, user_id=message.from_user.id
             )
             if member.status in ["member", "administrator", "creator"]:
-                #Підписаний аде не в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
+                # Підписаний аде не в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
                 c = await db.cursor()
                 await c.execute(
                     "INSERT OR IGNORE INTO chat_stats (user_id, channel_id) VALUES (?, ?)",
@@ -174,8 +224,10 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 )
                 await db.commit()
                 # запуск АНТИСПАМ ФУНКЦІЙ словники ітд
-            else: # не підписаний на канал
-                # підвищена увага оскільки рідко не підписаний на канал а лише на чат
+                # по часу не преевіряємо бо старічок
+
+            else:  # не підписаний на канал і чат ?????
+                # поки не впевнений але оновлена логіка не має сюди взагалі завести. треба пізніше преевірити
                 print("Не підписаний на канал взагалі")
 
     else:  # спрацюе коли нема пари. новий чат.
