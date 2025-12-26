@@ -1,0 +1,25 @@
+[Unit]
+Description=Telegram Anti-Spam Bot Service
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/antispam_bot
+ExecStart=/home/ubuntu/antispam_bot/venv/bin/python /home/ubuntu/antispam_bot/bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+sudo nano /etc/systemd/system/antispam.service
+
+
+
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+sudo systemctl restart antispam
+
+sudo systemctl status antispam
+
+sudo systemctl stop antispam

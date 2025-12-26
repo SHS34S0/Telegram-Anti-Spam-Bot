@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+.pytest_cache/
+anti_spam.db
+config.py
+fot.png
