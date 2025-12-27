@@ -30,6 +30,21 @@ CREATE TABLE "chat_links" (
     "channel_id" INTEGER NOT NULL    -- ID каналу (основного)
 );
 
+CREATE TABLE "votings" (
+    "chat_id" INTEGER,
+    "message_id" INTEGER,
+    "user_id" INTEGER,
+    "work_m_id" INTEGER,
+    "bot" INTEGER DEFAULT 0,
+    "human" INTEGER DEFAULT 0,
+    UNIQUE("chat_id", "message_id")
+);
+
+CREATE TABLE "votes_log" (
+    "voting_m_id" INTEGER, -- ID повідомлення з кнопками
+    "voter_id" INTEGER,    -- ID того, хто натиснув кнопку
+    UNIQUE("voting_m_id", "voter_id")
+);
 ---
 CREATE TRIGGER "track_name_changes"
 BEFORE UPDATE ON "users_global"

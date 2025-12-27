@@ -18,6 +18,9 @@ import re
 from aiogram.exceptions import TelegramBadRequest
 from datetime import datetime, timedelta
 import time
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton
+from aiogram.types import CallbackQuery
 
 TOKEN = config.TOKEN
 ##########################################################
@@ -189,7 +192,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             )
             await db.commit()
             # після +1 до повідомлення починаємо преевірки
-            is_young = await check_join_date(db, u_id, channel_id)
+            is_young = await check_join_date(db, u_id, channel_id)  # SQL
 
             if is_young:
                 has_media = (
@@ -214,6 +217,15 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         print("Занадто молодий (звичайний): просто видалили")
                         return  # рештиа не має сенсу
                     else:  # може проскочити спам
+                        work_m_id = await message.reply("Це повідомлення виглядає підозріло?",reply_markup=get_vote_keyboard(),)
+                        await db.execute(
+                            "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
+                            (c_id, message.message_id, u_id, work_m_id.message_id ),
+                        )
+                        await db.commit()
+                        
+                        print("Запис в базу створено\nпреедаємо повідомлення з кнопками")
+                        
 
                         # можливо треба преевірку опису профіля зробити
                         # або кнопку голосування
@@ -264,12 +276,107 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     ##################################
 
 
+def get_vote_keyboard():
+    builder = InlineKeyboardBuilder()
+
+    builder.add(
+        InlineKeyboardButton(text="🤖 Бот", callback_data="vote_bot"),
+        InlineKeyboardButton(text="👤 Не бот", callback_data="vote_human"),
+    )
+
+    builder.adjust(2)
+    return builder.as_markup()  # Повертаємо готовий результат
+
+
+@dp.callback_query(F.data.startswith("vote_"))
+async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
+
+    await callback.answer("Дякуємо!", show_alert=True)
+
+    # 2. А далі вже спокійно робимо свою роботу
+    voter_id = callback.from_user.id
+    m_id = callback.message.message_id
+    vote_result = callback.data
+    c = await db.cursor()
+
+    try:
+        try: #Пробуємо додати запис про голос
+            await db.execute(
+                "INSERT INTO votes_log (voting_m_id, voter_id) VALUES (?, ?)",
+                (m_id, voter_id)
+            )
+            # Якщо ми тут юзер голосує вперше
+            await db.commit()
+        except aiosqlite.IntegrityError: # якщо двічі голосуватиме
+            # Ця помилка виникне, якщо UNIQUE зпрацює (юзер уже є в базі)
+            await callback.answer("Ви вже голосували!", show_alert=True)
+            return
+        ###########################
+        if vote_result == "vote_bot":
+            # додаємо бал
+            await db.execute(
+                "UPDATE votings SET bot = bot + 1 WHERE work_m_id = ?",(m_id,),)
+            await db.commit()
+
+            await c.execute("SELECT * FROM votings WHERE work_m_id = ?" , (m_id,),)
+            ban = await c.fetchone()
+            if not ban:
+                await callback.answer("Голосування завершено.")
+                return
+            #################
+            elif ban[4] >= 3:
+                print("ban і можна видалити лог")
+                try:
+                    await callback.bot.delete_message(chat_id=ban[0], message_id=ban[1])
+                except Exception:
+                    pass # Якщо повідомлення вже хтось видалив — ігноруємо
+                await callback.message.delete()
+                # 2. Банимо спамера (наприклад, на 24 години)
+                # ban_until = int(time.time()) + 100
+                ban_until = int(time.time()) + 86400
+                await callback.message.chat.ban(user_id=ban[2], until_date=ban_until)
+                # 3. Видаляємо повідомлення з кнопками (ти це вже зробив)
+                # 4. ЧИСТИМО БАЗУ (щоб не накопичувати сміття)
+
+                # і робоче повідомлення з кнопками
+            elif ban[5] >= 3: # людина
+                await callback.message.delete()
+
+            else:
+                await callback.message.edit_text(
+                f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
+                reply_markup=get_vote_keyboard(),
+            )
+        elif vote_result == "vote_human":
+            # 1. Додаємо голос за людину
+            await db.execute(
+                "UPDATE votings SET human = human + 1 WHERE work_m_id = ?", (m_id,)
+            )
+            await db.commit()
+
+            # 2. Перевіряємо, скільки вже голосів
+            await c.execute("SELECT * FROM votings WHERE work_m_id = ?" , (m_id,),)
+            ban = await c.fetchone()
+
+            if ban and ban[5] >= 3: # Якщо 3 голоси за людину
+                await callback.message.delete()
+                print("Виправдано: це людина")
+            elif ban:
+                # Оновлюємо текст, щоб бачити прогрес і в "людських" голосах
+                await callback.message.edit_text(
+                    f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
+                    reply_markup=get_vote_keyboard(),
+                )
+    except TelegramBadRequest: 
+        pass
+####
 async def main() -> None:
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
     async with aiosqlite.connect("anti_spam.db") as db:
-        # Додай параметр allowed_updates, щоб отримувати події вступу/виходу
-        await dp.start_polling(bot, db=db, allowed_updates=["message", "chat_member"])
+        await dp.start_polling(
+            bot, db=db, allowed_updates=["message", "chat_member", "callback_query"]
+        )
 
 
 if __name__ == "__main__":
