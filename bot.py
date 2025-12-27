@@ -112,7 +112,6 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 # Замість INSERT OR IGNORE для статистики
 
 
-
 #####
 @dp.message(CommandStart())  # /start
 async def command_start_handler(message: Message) -> None:
@@ -193,7 +192,15 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             is_young = await check_join_date(db, u_id, channel_id)
 
             if is_young:
-                if u_id > 6999999999:
+                has_media = (
+                    message.photo
+                    or message.video
+                    or message.video_note
+                    or message.sticker
+                    or message.animation
+                    or message.forward_date  # Це переслане повідомлення
+                )
+                if has_media:
                     # Бан 24 години
                     ban_until = int(time.time()) + 86400  # Надійніше через Unix-час
                     await message.delete()
@@ -201,11 +208,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     print("Занадто молодий (7млрд+): бан 24 години")
                     return  # рештиа не має сенсу
                 else:
-                    # Бан 1 година
-                    ban_until = int(time.time()) + 3600
+                    # просто пидалення
                     await message.delete()
-                    await message.chat.ban(user_id=u_id, until_date=ban_until)
-                    print("Занадто молодий (звичайний): бан 1 година")
+                    print("Занадто молодий (звичайний): просто видалили")
                     return  # рештиа не має сенсу
             else:
                 print("Перевірка пройдена: підписаний довше ніж 2 хв")
