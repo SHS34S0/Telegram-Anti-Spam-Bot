@@ -198,7 +198,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     or message.video_note
                     or message.sticker
                     or message.animation
-                    or message.forward_date  # Це переслане повідомлення
+                    or message.forward_date  # переслане повідомлення
                 )
                 if has_media:
                     # Бан 24 години
@@ -208,10 +208,16 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     print("Занадто молодий (7млрд+): бан 24 години")
                     return  # рештиа не має сенсу
                 else:
-                    # просто пидалення
-                    await message.delete()
-                    print("Занадто молодий (звичайний): просто видалили")
-                    return  # рештиа не має сенсу
+                    if u_id > 6999999999:
+                        # просто пидалення
+                        await message.delete()
+                        print("Занадто молодий (звичайний): просто видалили")
+                        return  # рештиа не має сенсу
+                    else:  # може проскочити спам
+
+                        # можливо треба преевірку опису профіля зробити
+                        # або кнопку голосування
+                        pass
             else:
                 print("Перевірка пройдена: підписаний довше ніж 2 хв")
                 pass
