@@ -1,41 +1,56 @@
-import config
 import asyncio
 import logging
 import sys
+import time
+import re
 from os import getenv
+from datetime import datetime, timedelta
+
 import aiosqlite
-from aiogram import Bot
-from aiogram import Bot, Dispatcher, html
+import config
+
+from aiogram import Bot, Dispatcher, html, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
-from aiogram.types import Message
-from aiogram import Router, types
-from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, MEMBER
-from aiogram import F
-from aiogram.types import ChatMemberUpdated
-import re
-from aiogram.exceptions import TelegramBadRequest
-from datetime import datetime, timedelta
-import time
+from aiogram.filters import CommandStart, ChatMemberUpdatedFilter, IS_NOT_MEMBER, MEMBER
+from aiogram.types import (
+    Message,
+    ChatMemberUpdated,
+    CallbackQuery,
+    InlineKeyboardButton,
+)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import InlineKeyboardButton
-from aiogram.types import CallbackQuery
+from aiogram.exceptions import TelegramBadRequest
 
 TOKEN = config.TOKEN
+VOITS = 2
+BAN24 = 86400
 ##########################################################
+
+
+async def register_or_update_passport(db, user_id, full_name, username):
+    await db.execute(
+        "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
+        (user_id, full_name, username),
+    )
+    # Цей апдейт потрібен, щоб оновлювати зміну імені
+    await db.execute(
+        "UPDATE users_global SET name = ?, username = ? WHERE user_id = ?",
+        (full_name, username, user_id),
+    )
+    await db.commit()
 
 
 async def tandem_id(db, c_id):  # преевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
     await c.execute("SELECT channel_id FROM chat_links WHERE chat_id = ?", (c_id,))
     channel_id = await c.fetchone()
-    if channel_id:
+    if channel_id:  # знайшли канал ід
         return channel_id[0]
-    else:
-        return None
+    return None
 
 
+# перевірка чи в базі є запис як підписник
 async def check_sub(db, user_id, channel_id):
     c = await db.cursor()
     await c.execute(
@@ -44,9 +59,7 @@ async def check_sub(db, user_id, channel_id):
     )
     check_status = await c.fetchone()
     if check_status:  # Якщо є в базі як підписник каналу
-        return True
-    else:  # Якщо нема як підписник каналу в базі
-        return False
+        return check_status is not None
 
 
 def has_weird_chars(text):
@@ -57,20 +70,34 @@ def has_weird_chars(text):
     return False
 
 
-######
+###### перевіряємо чи підписаний хочаб 2 хв
+# можливо якщо ще десь буду використовувати треба час в хв передавати як аргумент.
+# поки не чіпати
 async def check_join_date(db, user_id, channel_id):
     c = await db.cursor()  # 1. Створили курсор
-    await c.execute(  # 2. Виконали запит через ЦЕЙ курсор
+    await c.execute(  # Виконали запит через ЦЕЙ курсор
         "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ? AND join_date >= datetime('now', '-2 minutes')",
         (user_id, channel_id),
     )
-    result = await c.fetchone()  # 3. Дістали результат
+    result = await c.fetchone()  # Дістали результат
     return result is not None
-    # if result:
-    #     return True
-    # else:
-    #     return False
 
+
+#####################################################################################################################---не запускалось
+# перевіркак чи вперше голосує?
+async def voiting(db, m_id, voter_id):
+    try:  # Пробуємо додати запис про голос
+        await db.execute(
+            "INSERT INTO votes_log (voting_m_id, voter_id) VALUES (?, ?)",
+            (m_id, voter_id),
+        )  # UNIQUE SQL
+        await db.commit()  # Якщо ми тут юзер голосує вперше
+        return True
+    except aiosqlite.IntegrityError:  # якщо двічі голосуватиме
+        return False
+
+
+#####################################################################################################################---не запускалось
 
 ###################################################################
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
@@ -92,15 +119,12 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
     # якщо вступ був в канал ми не знайдемо пару
     channel_id = await tandem_id(db, c_id)
     if not channel_id:  # пара не була знайдена
-        # значить c_id має ід каналу
+        # значить c_id = event.chat.id отримав ід каналу
         channel_id = c_id
 
     print(f"Юзер {user_id} ({full_name}) вступив у канал {channel_id}")
 
-    await db.execute(
-        "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
-        (user_id, full_name, username),
-    )
+    await register_or_update_passport(db, user_id, full_name, username)
     await db.execute(
         """
         INSERT INTO chat_stats (user_id, channel_id, join_date) 
@@ -110,9 +134,7 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
         (user_id, channel_id),
     )
     await db.commit()
-
-
-# Замість INSERT OR IGNORE для статистики
+    # Замінити на INSERT OR IGNORE для статистики ?
 
 
 #####
@@ -124,6 +146,7 @@ async def command_start_handler(message: Message) -> None:
 ############
 @dp.message()
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
+    # тут може міститись помилка. оскільки підтверджено бот пропускає написи від імені каналу не того який бот адмінить.
     if message.sender_chat:
         return  # Це пише канал або анонімний адмін, не чіпаємо його
     if message.new_chat_members or message.left_chat_member:
@@ -170,18 +193,11 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 
     ###################початок
     # Запис або оновлення паспорта
-    # INSERT OR IGNORE додасть юзера якщо його ще нема в базі
-    await db.execute(
-        "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
-        (u_id, user_full_name, username),
-    )
-    # UPDATE оновить імя якщо юзер його змінив (спрацюєОСІНТ тригер в базі)
-    await db.execute(
-        "UPDATE users_global SET name = ?, username = ? WHERE user_id = ?",
-        (user_full_name, username, u_id),
-    )
-    await db.commit()
+    await register_or_update_passport(db, u_id, user_full_name, username)
 
+    #################---------------------------------------------------------------------------перевірка чи підписник каналу
+    # якщо channel_id не існує це не страшно. це ситуація коли бота в канал щойно додали.
+    # він створить пару першим повідомленням в чаті. і з другого воно буде спрацьовувати
     if channel_id:  #  ід пару отрималои робимо далі преевірки
         # перевірка чи є в базі як підписник каналу ?
         status = await check_sub(db, u_id, channel_id)
@@ -192,6 +208,8 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             )
             await db.commit()
             # після +1 до повідомлення починаємо преевірки
+
+            # термін протягом якого підписаний користувач на канал.
             is_young = await check_join_date(db, u_id, channel_id)  # SQL
 
             if is_young:
@@ -199,61 +217,67 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     message.video_note
                     or message.sticker
                     or message.animation
-                    or message.forward_date  # переслане повідомлення
+                    or message.forward_date
                 )
                 if has_media:
                     # Бан 24 години
-                    ban_until = int(time.time()) + 86400  # Надійніше через Unix-час
                     await message.delete()
-                    await message.chat.ban(user_id=u_id, until_date=ban_until)
+                    await message.chat.ban(
+                        user_id=u_id, until_date=int(time.time()) + BAN24
+                    )
                     print("Занадто молодий (7млрд+): бан 24 години")
                     return  # рештиа не має сенсу
                 else:
-                    if u_id > 6999999999:
-                        # просто пидалення
-                        await message.delete()
-                        print("Занадто молодий (звичайний): просто видалили")
-                        return  # рештиа не має сенсу
-                    else:  # може проскочити спам
-                        work_m_id = await message.reply(
-                            "Це повідомлення виглядає підозріло?",
-                            reply_markup=get_vote_keyboard(),
-                        )
-                        await db.execute(
-                            "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
-                            (c_id, message.message_id, u_id, work_m_id.message_id),
-                        )
-                        await db.commit()
+                    work_m_id = await message.reply(
+                        "⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇",
+                        reply_markup=get_vote_keyboard(),
+                    )
+                    # записуємо в базу данних ТИМЧАСОВИЙ запис на період голосування. передаємо необхідну інфу
+                    await db.execute(
+                        "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
+                        (c_id, message.message_id, u_id, work_m_id.message_id),
+                    )
+                    await db.commit()
 
-                        print(
-                            "Запис в базу створено\nпреедаємо повідомлення з кнопками"
-                        )
+                    print("Запис в базу створено\nпреедаємо повідомлення з кнопками")
 
-                        # можливо треба преевірку опису профіля зробити
-                        # або кнопку голосування
-                        pass
+                    # потрібно пошукати чи нема методу 1 махом витягти всіх адмінів чату і передати в запис голосування.
+                    # оскільки голос адміна має закривати голосування повністью.
+                    # або метод для обробника кнопок по типу як в верху перевіряється на адмінство без запиту конкретного ід що зекономить запити до ТГ
+                    pass
             else:
                 print("Перевірка пройдена: підписаний довше ніж 2 хв")
+                # тут з часм варто додати персоналізовані функції для кожного каналу.
+                # після створення адмін кабінету
                 pass
-        else:  # в базі нема
-            # Запит в тг чи підписаний НА КАНАЛ а не чат
+        else:  # в базі нема запису про підписку на канал чи чат
+            # Запит в тг чи підписаний НА КАНАЛ
             member = await bot.get_chat_member(
                 chat_id=channel_id, user_id=message.from_user.id
             )
             if member.status in ["member", "administrator", "creator"]:
-                # Підписаний аде не в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
+                # Підписаний вже в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
                 c = await db.cursor()
                 await c.execute(
                     "INSERT OR IGNORE INTO chat_stats (user_id, channel_id) VALUES (?, ?)",
                     (u_id, channel_id),
                 )
                 await db.commit()
-                # запуск АНТИСПАМ ФУНКЦІЙ словники ітд
-                # по часу не преевіряємо бо старічок
-
-            else:  # не підписаний на канал і чат ?????
-                # поки не впевнений але оновлена логіка не має сюди взагалі завести. треба пізніше преевірити
-                print("Не підписаний на канал взагалі")
+            else:  # перевірка підписки на ЧАТ
+                member = await bot.get_chat_member(
+                    chat_id=c_id, user_id=message.from_user.id
+                )
+                if member.status in ["member", "administrator", "creator"]:
+                    # Підписаний вже в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
+                    c = await db.cursor()
+                    await c.execute(
+                        "INSERT OR IGNORE INTO chat_stats (user_id, channel_id) VALUES (?, ?)",
+                        (u_id, channel_id),
+                    )
+                    await db.commit()
+                else:
+                    print("Не підписаний взагалі ніде")
+                    # я не впевнений чи це модливо але тут треба буде превірку кинути на бота
 
     else:  # спрацюе коли нема пари. новий чат.
         # Отримуємо повну інформацію про чат, де написали повідомлення
@@ -292,36 +316,26 @@ def get_vote_keyboard():
 
 @dp.callback_query(F.data.startswith("vote_"))
 async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
-
+    # треба налагодити бо щоб не натиснув висвічуеться тільки це
+    # якщо прибираю не працюе і кнопки завичаю. ТРЕБА ДОСЛІДИТИ
     await callback.answer("Дякуємо!", show_alert=True)
 
-    # 2. А далі вже спокійно робимо свою роботу
     voter_id = callback.from_user.id
     m_id = callback.message.message_id
     vote_result = callback.data
     c = await db.cursor()
+    # перевірка чи перший раз голосує
+    first_voiting = await voiting(db, m_id, voter_id)
 
-    try:
-        try:  # Пробуємо додати запис про голос
-            await db.execute(
-                "INSERT INTO votes_log (voting_m_id, voter_id) VALUES (?, ?)",
-                (m_id, voter_id),
-            )
-            # Якщо ми тут юзер голосує вперше
-            await db.commit()
-        except aiosqlite.IntegrityError:  # якщо двічі голосуватиме
-            # Ця помилка виникне, якщо UNIQUE зпрацює (юзер уже є в базі)
-            await callback.answer("Ви вже голосували!", show_alert=True)
-            return
-        ###########################
-        if vote_result == "vote_bot":
-            # додаємо бал
+    ###########################
+    if vote_result == "vote_bot":
+        if first_voiting:  # голосує вперше файл логу створено
             await db.execute(
                 "UPDATE votings SET bot = bot + 1 WHERE work_m_id = ?",
                 (m_id,),
             )
             await db.commit()
-
+            # перевірка кількості голосів
             await c.execute(
                 "SELECT * FROM votings WHERE work_m_id = ?",
                 (m_id,),
@@ -331,54 +345,66 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 await callback.answer("Голосування завершено.")
                 return
             #################
-            elif ban[4] >= 3:
-                print("ban і можна видалити лог")
+            elif ban[4] >= VOITS:
+                print("ban")
                 try:
+                    # повідомлення де спам
                     await callback.bot.delete_message(chat_id=ban[0], message_id=ban[1])
                 except Exception:
-                    pass  # Якщо повідомлення вже хтось видалив — ігноруємо
+                    # Якщо повідомлення вже видалив адмін
+                    # перевіряємо чи забанений. якщо так вихід якщо ні то бан і вихід
+                    return
+                # сюди потрапляємо якщо адмін ще не встиг втрутитись
+                await callback.message.chat.ban(
+                    user_id=ban[2], until_date=int(time.time()) + BAN24
+                )
+                # інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закадаємо туди інфу про спамера
+                await callback.message.edit_text(
+                    f'Користувачі вирішили, що <a href="tg://user?id={callback.from_user.id}">{callback.from_user.full_name}</a> 🤖 Бот ',
+                    reply_markup=get_vote_keyboard(),
+                )
+                # прибираємо в чаті повідомлення з кнопками
                 await callback.message.delete()
-                # 2. Банимо спамера (наприклад, на 24 години)
-                # ban_until = int(time.time()) + 100
-                ban_until = int(time.time()) + 86400
-                await callback.message.chat.ban(user_id=ban[2], until_date=ban_until)
-                # 3. Видаляємо повідомлення з кнопками (ти це вже зробив)
-                # 4. ЧИСТИМО БАЗУ (щоб не накопичувати сміття)
-
-                # і робоче повідомлення з кнопками
-            elif ban[5] >= 3:  # людина
+                # варто дописати чистку сміття з бази після голосування
+            elif ban[5] >= VOITS:  # людина
                 await callback.message.delete()
 
             else:
                 await callback.message.edit_text(
-                    f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
+                    f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} ❌ 🧑 Людина: {ban[5]}",
                     reply_markup=get_vote_keyboard(),
                 )
-        elif vote_result == "vote_human":
-            # 1. Додаємо голос за людину
-            await db.execute(
-                "UPDATE votings SET human = human + 1 WHERE work_m_id = ?", (m_id,)
-            )
-            await db.commit()
+        else:
+            await callback.answer("Ваш голос вже було зараховано", show_alert=True)
+    elif vote_result == "vote_human":
+        if not first_voiting:
+            await callback.answer("Ваш голос вже було зараховано", show_alert=True)
+            return
+        # 1. Додаємо голос за людину
+        await db.execute(
+            "UPDATE votings SET human = human + 1 WHERE work_m_id = ?", (m_id,)
+        )
+        await db.commit()
 
-            # 2. Перевіряємо, скільки вже голосів
-            await c.execute(
-                "SELECT * FROM votings WHERE work_m_id = ?",
-                (m_id,),
-            )
-            ban = await c.fetchone()
+        # 2. Перевіряємо, скільки вже голосів
+        await c.execute(
+            "SELECT * FROM votings WHERE work_m_id = ?",
+            (m_id,),
+        )
+        ban = await c.fetchone()
 
-            if ban and ban[5] >= 3:  # Якщо 3 голоси за людину
-                await callback.message.delete()
-                print("Виправдано: це людина")
-            elif ban:
-                # Оновлюємо текст, щоб бачити прогрес і в "людських" голосах
-                await callback.message.edit_text(
-                    f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
-                    reply_markup=get_vote_keyboard(),
-                )
-    except TelegramBadRequest:
+        if ban and ban[5] >= VOITS:  # Якщо 3 голоси за людину
+            await callback.message.delete()
+            print("Виправдано: це людина")
+        elif ban:
+            # Оновлюємо текст, щоб бачити прогрес і в "людських" голосах
+            await callback.message.edit_text(
+                f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} ❌ 🧑 Людина: {ban[5]}",
+                reply_markup=get_vote_keyboard(),
+            )
+    else:
         pass
+        # поки що так
 
 
 ####
