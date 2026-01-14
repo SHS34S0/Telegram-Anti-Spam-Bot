@@ -196,9 +196,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 
             if is_young:
                 has_media = (
-                    message.photo
-                    or message.video
-                    or message.video_note
+                    message.video_note
                     or message.sticker
                     or message.animation
                     or message.forward_date  # переслане повідомлення
@@ -217,15 +215,19 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         print("Занадто молодий (звичайний): просто видалили")
                         return  # рештиа не має сенсу
                     else:  # може проскочити спам
-                        work_m_id = await message.reply("Це повідомлення виглядає підозріло?",reply_markup=get_vote_keyboard(),)
+                        work_m_id = await message.reply(
+                            "Це повідомлення виглядає підозріло?",
+                            reply_markup=get_vote_keyboard(),
+                        )
                         await db.execute(
                             "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
-                            (c_id, message.message_id, u_id, work_m_id.message_id ),
+                            (c_id, message.message_id, u_id, work_m_id.message_id),
                         )
                         await db.commit()
-                        
-                        print("Запис в базу створено\nпреедаємо повідомлення з кнопками")
-                        
+
+                        print(
+                            "Запис в базу створено\nпреедаємо повідомлення з кнопками"
+                        )
 
                         # можливо треба преевірку опису профіля зробити
                         # або кнопку голосування
@@ -300,14 +302,14 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
     c = await db.cursor()
 
     try:
-        try: #Пробуємо додати запис про голос
+        try:  # Пробуємо додати запис про голос
             await db.execute(
                 "INSERT INTO votes_log (voting_m_id, voter_id) VALUES (?, ?)",
-                (m_id, voter_id)
+                (m_id, voter_id),
             )
             # Якщо ми тут юзер голосує вперше
             await db.commit()
-        except aiosqlite.IntegrityError: # якщо двічі голосуватиме
+        except aiosqlite.IntegrityError:  # якщо двічі голосуватиме
             # Ця помилка виникне, якщо UNIQUE зпрацює (юзер уже є в базі)
             await callback.answer("Ви вже голосували!", show_alert=True)
             return
@@ -315,10 +317,15 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
         if vote_result == "vote_bot":
             # додаємо бал
             await db.execute(
-                "UPDATE votings SET bot = bot + 1 WHERE work_m_id = ?",(m_id,),)
+                "UPDATE votings SET bot = bot + 1 WHERE work_m_id = ?",
+                (m_id,),
+            )
             await db.commit()
 
-            await c.execute("SELECT * FROM votings WHERE work_m_id = ?" , (m_id,),)
+            await c.execute(
+                "SELECT * FROM votings WHERE work_m_id = ?",
+                (m_id,),
+            )
             ban = await c.fetchone()
             if not ban:
                 await callback.answer("Голосування завершено.")
@@ -329,7 +336,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 try:
                     await callback.bot.delete_message(chat_id=ban[0], message_id=ban[1])
                 except Exception:
-                    pass # Якщо повідомлення вже хтось видалив — ігноруємо
+                    pass  # Якщо повідомлення вже хтось видалив — ігноруємо
                 await callback.message.delete()
                 # 2. Банимо спамера (наприклад, на 24 години)
                 # ban_until = int(time.time()) + 100
@@ -339,14 +346,14 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 # 4. ЧИСТИМО БАЗУ (щоб не накопичувати сміття)
 
                 # і робоче повідомлення з кнопками
-            elif ban[5] >= 3: # людина
+            elif ban[5] >= 3:  # людина
                 await callback.message.delete()
 
             else:
                 await callback.message.edit_text(
-                f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
-                reply_markup=get_vote_keyboard(),
-            )
+                    f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
+                    reply_markup=get_vote_keyboard(),
+                )
         elif vote_result == "vote_human":
             # 1. Додаємо голос за людину
             await db.execute(
@@ -355,10 +362,13 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
             await db.commit()
 
             # 2. Перевіряємо, скільки вже голосів
-            await c.execute("SELECT * FROM votings WHERE work_m_id = ?" , (m_id,),)
+            await c.execute(
+                "SELECT * FROM votings WHERE work_m_id = ?",
+                (m_id,),
+            )
             ban = await c.fetchone()
 
-            if ban and ban[5] >= 3: # Якщо 3 голоси за людину
+            if ban and ban[5] >= 3:  # Якщо 3 голоси за людину
                 await callback.message.delete()
                 print("Виправдано: це людина")
             elif ban:
@@ -367,8 +377,10 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                     f"Це повідомлення виглядає підозріло?\nБот {ban[4]} Людина {ban[5]} ",
                     reply_markup=get_vote_keyboard(),
                 )
-    except TelegramBadRequest: 
+    except TelegramBadRequest:
         pass
+
+
 ####
 async def main() -> None:
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
