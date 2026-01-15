@@ -13,20 +13,3 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 sudo nano /etc/systemd/system/antispam.service
-
-
-
-sudo systemctl daemon-reexec
-sudo systemctl daemon-reload
-sudo systemctl restart antispam
-
-sudo systemctl status antispam
-sudo journalctl -u antispam -n 100
-sudo journalctl -u antispam -f
-
-
-
-sudo systemctl stop antispam
-
-rm bot.py
-nano bot.py

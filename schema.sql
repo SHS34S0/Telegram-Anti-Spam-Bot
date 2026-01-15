@@ -55,12 +55,6 @@ BEGIN
     VALUES (OLD.user_id, OLD.name, OLD.username);
 END;
 
----- DELETE FROM chat_stats;
 
--- DELETE FROM chat_stats WHERE channel_id IN (-1001432792421, -1001284528408, -1001173867158 );
--- SELECT * FROM chat_stats;
-
-
--- INSERT INTO "chat_links" ("chat_id", "channel_id") VALUES ('1003600246543', '1002211190693');
 
 

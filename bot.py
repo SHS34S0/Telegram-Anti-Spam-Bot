@@ -23,7 +23,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest
 
 TOKEN = config.TOKEN
-VOITS = 2
+VOITS = 3
 BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
 GOOD_STATUSES = {"member", "administrator", "creator"}
@@ -370,6 +370,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 log_text = f'Користувачі вирішили, що <a href="tg://user?id={ban[2]}">{spammer_name}</a> 🤖 Бот.'
                 # інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закадаємо туди інфу про спамера
                 await clear_voting(db, m_id)
+                # тут ймовірнолишній видаленнч
                 await callback.message.edit_text(
                     log_text,
                     reply_markup=get_vote_keyboard(),
@@ -382,7 +383,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
 
             else:
                 await callback.message.edit_text(
-                    f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} ❌ 🧑 Людина: {ban[5]}",
+                    f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} VS 🧑 Людина: {ban[5]}",
                     reply_markup=get_vote_keyboard(),
                 )
         else:
