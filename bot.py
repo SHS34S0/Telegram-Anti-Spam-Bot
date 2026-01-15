@@ -23,7 +23,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest
 
 TOKEN = config.TOKEN
-VOITS = 3
+VOITS = 2
 BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
 GOOD_STATUSES = {"member", "administrator", "creator"}
@@ -93,8 +93,7 @@ async def check_join_date(db, user_id, channel_id):
     return result is not None
 
 
-#####################################################################################################################---не запускалось
-# перевіркак чи вперше голосує?
+##########
 async def voting(db, m_id, voter_id):
     try:  # Пробуємо додати запис про голос
         await db.execute(
@@ -113,7 +112,39 @@ async def clear_voting(db, m_id):
     await db.commit()
 
 
-#####################################################################################################################---не запускалось
+async def emoji_checker(message):
+    ALLOWED = set(
+        "абвгґдеєжзиіїйклмнопрстуфхцчшщьюяАБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?,. "
+    )
+
+    total_len = len(message)
+    if total_len < 25:
+        return 100  # Малі повідомлення не чіпаємо
+
+    clean_count = 0
+    for char in message:
+        if char in ALLOWED:
+            clean_count += 1
+
+    ratio = (clean_count * 100) / total_len
+
+    # ДИНАМІЧНА ЛОГІКА
+    # Якщо повідомлення короткедо 100 символів
+    if total_len < 100:
+        if ratio >= 60:  # Дозволяємо більше смайлів
+            return 100
+        else:
+            return ratio  # Повертаємо реальний низький бал
+
+    # Якщо повідомлення довге > 100
+    else:
+        if ratio >= 85:  # Вимагаємо чистоти
+            return 100
+        else:
+            return ratio
+
+
+########################################
 
 ###################################################################
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
@@ -162,6 +193,13 @@ async def command_start_handler(message: Message) -> None:
 ############
 @dp.message()
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
+    async def safe_delete(message):
+        """Видаляє повідомлення. Якщо його вже нема то просто мовчить."""
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
     # тут може міститись помилка. оскільки підтверджено бот пропускає написи від імені каналу не того який бот адмінить.
     if message.sender_chat:
         return  # Це пише канал або анонімний адмін, не чіпаємо його
@@ -176,6 +214,37 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
     channel_id = await tandem_id(db, c_id)
+
+    # emoji spam
+    kef = await emoji_checker(message.text)
+
+    # 75% тексту - це нормально для живого спілкування
+    # Твій код перевірки
+    if kef >= 90:
+        pass
+
+    elif kef >= 70:
+        # Безпечне видалення
+        await safe_delete(message)
+        try:
+            await message.chat.ban(user_id=u_id, until_date=int(time.time()) + BAN24)
+            return
+        except Exception:
+            pass
+
+    else:
+        # Безпечне видалення
+        await safe_delete(message)
+        # Бан назавжди
+        try:
+            await message.chat.ban(user_id=u_id)
+            return
+        except Exception:
+            pass
+
+        # Банимо назавжди в випадку помилки
+        await message.chat.ban(user_id=u_id)
+        return
 
     ## Перевірк на шлюхосимволи
     if message.text and has_weird_chars(message.text):
@@ -201,10 +270,16 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 if member.status in ADMIN_STATUSES:
                     pass
                 else:
-                    await message.delete()
+                    try:
+                        await message.delete()
+                    except Exception:
+                        pass
                     return  # Чат чистий, далі не йдемо
         except Exception:
-            await message.delete()
+            try:
+                await message.delete()
+            except Exception:
+                pass
             return  # Чат чистий, далі не йдемо
 
     ###################початок
@@ -370,7 +445,6 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 log_text = f'Користувачі вирішили, що <a href="tg://user?id={ban[2]}">{spammer_name}</a> 🤖 Бот.'
                 # інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закадаємо туди інфу про спамера
                 await clear_voting(db, m_id)
-                # тут ймовірнолишній видаленнч
                 await callback.message.edit_text(
                     log_text,
                     reply_markup=get_vote_keyboard(),
@@ -383,7 +457,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
 
             else:
                 await callback.message.edit_text(
-                    f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} VS 🧑 Людина: {ban[5]}",
+                    f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} ❌ 🧑 Людина: {ban[5]}",
                     reply_markup=get_vote_keyboard(),
                 )
         else:
