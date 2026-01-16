@@ -23,7 +23,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest
 
 TOKEN = config.TOKEN
-VOITS = 2
+VOITS = 3
 BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
 GOOD_STATUSES = {"member", "administrator", "creator"}
@@ -112,7 +112,7 @@ async def clear_voting(db, m_id):
     await db.commit()
 
 
-async def emoji_checker(message):
+def emoji_checker(message):
     ALLOWED = set(
         "абвгґдеєжзиіїйклмнопрстуфхцчшщьюяАБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?,. "
     )
@@ -251,7 +251,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     channel_id = await tandem_id(db, c_id)
 
     # emoji spam
-    kef = await emoji_checker(message.text)
+    kef = emoji_checker(message.text)
 
     # 75% тексту - це нормально для живого спілкування
     # Твій код перевірки
