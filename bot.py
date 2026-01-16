@@ -116,35 +116,75 @@ async def emoji_checker(message):
     ALLOWED = set(
         "абвгґдеєжзиіїйклмнопрстуфхцчшщьюяАБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?,. "
     )
+    try:
+        total_len = len(message)
 
-    total_len = len(message)
-    if total_len < 25:
-        return 100  # Малі повідомлення не чіпаємо
+        if total_len < 25:
+            return 100  # Малі повідомлення не чіпаємо
 
-    clean_count = 0
-    for char in message:
-        if char in ALLOWED:
-            clean_count += 1
+        clean_count = 0
+        for char in message:
+            if char in ALLOWED:
+                clean_count += 1
 
-    ratio = (clean_count * 100) / total_len
+        ratio = (clean_count * 100) / total_len
 
-    # ДИНАМІЧНА ЛОГІКА
-    # Якщо повідомлення короткедо 100 символів
-    if total_len < 100:
-        if ratio >= 60:  # Дозволяємо більше смайлів
-            return 100
+        # ДИНАМІЧНА ЛОГІКА
+        # Якщо повідомлення короткедо 100 символів
+        if total_len < 100:
+            if ratio >= 60:  # Дозволяємо більше смайлів
+                return 100
+            else:
+                return ratio  # Повертаємо реальний низький бал
+
+        # Якщо повідомлення довге > 100
         else:
-            return ratio  # Повертаємо реальний низький бал
+            if ratio >= 85:  # Вимагаємо чистоти
+                return 100
+            else:
+                return ratio
+    except TypeError:  # все ок це не текст а гівка чи ще щось
+        return 100
 
-    # Якщо повідомлення довге > 100
-    else:
-        if ratio >= 85:  # Вимагаємо чистоти
-            return 100
+
+async def safe_delete(message):
+    """Видаляє повідомлення. Якщо його вже нема то просто мовчить."""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+async def safe_ban(message, u_id, sec=0):
+    """
+    sec = 0 -> Бан назавжди
+    sec > 0 -> Бан на кількість секунд
+    """
+    try:
+        if sec > 0:
+            # Бан на час
+            end_date = int(time.time()) + sec
+            await message.chat.ban(user_id=u_id, until_date=end_date)
+            print(f"TEMP BAN: {u_id} for {sec}s")
         else:
-            return ratio
+            # Бан назавжди
+            await message.chat.ban(user_id=u_id)
+            print(f"PERMA BAN: {u_id}")
+
+    except Exception as e:
+        # Ловимо помилки (наприклад, бот не адмін)
+        print(f"Ban error: {e}")
 
 
 ########################################
+async def send_timed_msg(bot, chat_id, text, delay=60):
+    try:
+        msg = await bot.send_message(chat_id=chat_id, text=text)
+        await asyncio.sleep(delay)
+        await safe_delete(msg)
+    except Exception:
+        pass
+
 
 ###################################################################
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
@@ -193,13 +233,8 @@ async def command_start_handler(message: Message) -> None:
 ############
 @dp.message()
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
-    async def safe_delete(message):
-        """Видаляє повідомлення. Якщо його вже нема то просто мовчить."""
-        try:
-            await message.delete()
-        except Exception:
-            pass
 
+    #########################################3
     # тут може міститись помилка. оскільки підтверджено бот пропускає написи від імені каналу не того який бот адмінить.
     if message.sender_chat:
         return  # Це пише канал або анонімний адмін, не чіпаємо його
@@ -220,44 +255,35 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 
     # 75% тексту - це нормально для живого спілкування
     # Твій код перевірки
+    reas_text = f"🛡 Користувач {user_full_name} був заблокований за спам."
     if kef >= 90:
         pass
-
     elif kef >= 70:
         # Безпечне видалення
         await safe_delete(message)
-        try:
-            await message.chat.ban(user_id=u_id, until_date=int(time.time()) + BAN24)
-            return
-        except Exception:
-            pass
-
+        await safe_ban(message, u_id, BAN24)
+        asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
+        return
     else:
-        # Безпечне видалення
         await safe_delete(message)
         # Бан назавжди
-        try:
-            await message.chat.ban(user_id=u_id)
-            return
-        except Exception:
-            pass
-
-        # Банимо назавжди в випадку помилки
-        await message.chat.ban(user_id=u_id)
+        await safe_ban(message, u_id)
+        asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
         return
 
     ## Перевірк на шлюхосимволи
     if message.text and has_weird_chars(message.text):
-        try:
-            await message.delete()
-            await message.chat.ban(user_id=u_id)
-            return  # Зупиняємо все інше
-        except Exception:
-            return
+        reason_text = f"🛡 Користувач {user_full_name} більше не покаже свій 🍑"
+        await safe_delete(message)
+        await safe_ban(message, u_id)
+        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+        return  # Зупиняємо все інше
+
     # превірка посилань та гіперпосилань
     bad_types = {"mention", "url", "text_link"}
     if message.entities and any(e.type in bad_types for e in message.entities):
         try:  # Якщо було спрацювання
+            reason_text = f'🛡 <a href="tg://user?id={u_id}">{user_full_name}</a> посилання заборонені'
             member_chat = await bot.get_chat_member(
                 chat_id=c_id, user_id=message.from_user.id
             )
@@ -270,19 +296,15 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 if member.status in ADMIN_STATUSES:
                     pass
                 else:
-                    try:
-                        await message.delete()
-                    except Exception:
-                        pass
+                    await safe_delete(message)
+                    asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
                     return  # Чат чистий, далі не йдемо
         except Exception:
-            try:
-                await message.delete()
-            except Exception:
-                pass
+            await safe_delete(message)
+            asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
             return  # Чат чистий, далі не йдемо
 
-    ###################початок
+    ###################
     # Запис або оновлення паспорта
     await register_or_update_passport(db, u_id, user_full_name, username)
 
@@ -311,11 +333,12 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     or message.forward_date
                 )
                 if has_media:
-                    # Бан 24 години
-                    await message.delete()
-                    await message.chat.ban(
-                        user_id=u_id, until_date=int(time.time()) + BAN24
+                    reason_text = (
+                        f"🛡 Користувач {user_full_name} був заблокований за спам."
                     )
+                    await safe_delete(message)
+                    await safe_ban(message, u_id, BAN24)
+                    asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
                     return  # рештиа не має сенсу
                 else:
                     work_m_id = await message.reply(
@@ -425,13 +448,8 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                     await clear_voting(db, m_id)
                     await callback.bot.delete_message(chat_id=ban[0], message_id=ban[1])
                 except Exception:
-                    # Якщо повідомлення вже видалив адмін
-                    # перевіряємо чи забанений. якщо так вихід якщо ні то бан і вихід
                     pass
-                # сюди потрапляємо якщо адмін ще не встиг втрутитись
-                await callback.message.chat.ban(
-                    user_id=ban[2], until_date=int(time.time()) + BAN24
-                )
+                await safe_ban(callback.message, ban[2], BAN24)
                 # запит в базу, щоб дістати імя спамера
                 await c.execute(
                     "SELECT name FROM users_global WHERE user_id = ?", (ban[2],)
@@ -449,8 +467,12 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                     log_text,
                     reply_markup=get_vote_keyboard(),
                 )
-                await callback.message.delete()
-                # варто дописати чистку сміття з бази після голосування
+
+                async def _wait_kill():
+                    await asyncio.sleep(60)  # Чекаємо 60 сек
+                    await safe_delete(callback.message)
+
+                asyncio.create_task(_wait_kill())
             elif ban[5] >= VOITS:  # людина
                 await clear_voting(db, m_id)
                 await callback.message.delete()
@@ -481,7 +503,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
 
         if ban and ban[5] >= VOITS:  # Якщо 3 голоси за людину
             await clear_voting(db, m_id)
-            await callback.message.delete()
+            await safe_delete(callback.message)
         elif ban:
             # Оновлюємо текст, щоб бачити прогрес і в "людських" голосах
             await callback.message.edit_text(
