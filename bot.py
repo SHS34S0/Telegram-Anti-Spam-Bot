@@ -28,12 +28,15 @@ VOITS = 3
 BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
 GOOD_STATUSES = {"member", "administrator", "creator"}
+
+
 ##########################################################
 async def safe_delete(message):
     try:
         await message.delete()
     except Exception:
         pass
+
 
 async def safe_ban(message, u_id, sec=0):
     try:
@@ -50,6 +53,8 @@ async def safe_ban(message, u_id, sec=0):
     except Exception as e:
         # Ловимо помилки (наприклад, бот не адмін)
         print(f"Ban error: {e}")
+
+
 async def send_timed_msg(bot, chat_id, text, delay=60):
     try:
         msg = await bot.send_message(chat_id=chat_id, text=text)
@@ -57,6 +62,7 @@ async def send_timed_msg(bot, chat_id, text, delay=60):
         await safe_delete(msg)
     except Exception:
         pass
+
 
 ###################################################################
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
@@ -76,7 +82,12 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 
     # Якщо вступ був в чат ми шукаемо пару каналу ід і повертаємо канал ід
     # якщо вступ був в канал ми не знайдемо пару
-    channel_id = await fl.tandem_id(db, c_id)
+    settings = await fl.get_chat_settings(db, c_id)
+    if settings:  # unpaking
+        channel_id, owner_id, voting_buttons, rus_language, stop_word = settings
+    else:  # нема запису про канал чи ще щось. спочатку варто створитизапис в базу
+        return
+
     if not channel_id:  # пара не була знайдена
         # значить c_id = event.chat.id отримав ід каналу
         channel_id = c_id
@@ -103,6 +114,7 @@ async def command_start_handler(message: Message) -> None:
     if message.chat.title == None:
         await message.answer(text)
 
+
 ############
 @dp.message()
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
@@ -121,63 +133,60 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     user_full_name = message.from_user.full_name
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
-    channel_id = await fl.tandem_id(db, c_id)
-
-    ## Перевірк на шлюхосимволи
-    if message.text and fl.has_weird_chars(message.text):
-        reason_text = f"🛡 Користувач {user_full_name} більше не покаже свій 🍑"
-        await safe_delete(message)  # Безпечне видалення
-        await safe_ban(message, u_id)
-        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
-        return
-
-    kef = fl.emoji_checker(message.text)
-    reas_text = f"🛡 Користувач {user_full_name} був заблокований за спам."
-    if kef >= 90:
-        pass
-    elif kef >= 70:
-        await safe_delete(message)
-        await safe_ban(message, u_id, BAN24)
-        asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
-        return
-    else:
-        await safe_delete(message)
-        # Бан назавжди
-        await safe_ban(message, u_id)
-        asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
-        return
-
-    bad_types = {"mention", "url", "text_link"}
-    if message.entities and any(e.type in bad_types for e in message.entities):
-        try:  # Якщо було спрацювання
-            reason_text = f'🛡 <a href="tg://user?id={u_id}">{user_full_name}</a> посилання заборонені'
-            member_chat = await bot.get_chat_member(
-                chat_id=c_id, user_id=message.from_user.id
-            )
-            if member_chat.status in ADMIN_STATUSES:
-                pass  # все ок адмінам можна
-            else:
-                member = await bot.get_chat_member(
-                    chat_id=channel_id, user_id=message.from_user.id
-                )
-                if member.status in ADMIN_STATUSES:
-                    pass
-                else:
-                    await safe_delete(message)
-                    asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
-                    return  # Чат чистий, далі не йдемо
-        except Exception:
-            await safe_delete(message)
+    settings = await fl.get_chat_settings(db, c_id)
+    if settings:
+        channel_id, owner_id, voting_buttons, rus_language, stop_word = settings
+        ## Перевірк на шлюхосимволи
+        if message.text and fl.has_weird_chars(message.text):
+            reason_text = f"🛡 Користувач {user_full_name} більше не покаже свій 🍑"
+            await safe_delete(message)  # Безпечне видалення
+            await safe_ban(message, u_id)
             asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
-            return  # Чат чистий, далі не йдемо
+            return
 
-    ###################
-    # Запис або оновлення паспорта
-    await fl.register_or_update_passport(db, u_id, user_full_name, username)
-    #################---------------------------------------------------------------------------перевірка чи підписник каналу
-    # якщо channel_id не існує це не страшно. це ситуація коли бота в канал щойно додали.
-    # він створить пару першим повідомленням в чаті. і з другого воно буде спрацьовувати
-    if channel_id:  #  ід пару отрималои робимо далі преевірки
+        kef = fl.emoji_checker(message.text)
+        reas_text = f"🛡 Користувач {user_full_name} був заблокований за спам."
+        if kef >= 90:
+            pass
+        elif kef >= 70:
+            await safe_delete(message)
+            await safe_ban(message, u_id, BAN24)
+            asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
+            return
+        else:
+            await safe_delete(message)
+            # Бан назавжди
+            await safe_ban(message, u_id)
+            asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
+            return
+
+        bad_types = {"mention", "url", "text_link"}
+        if message.entities and any(e.type in bad_types for e in message.entities):
+            try:  # Якщо було спрацювання
+                reason_text = f'🛡 <a href="tg://user?id={u_id}">{user_full_name}</a> посилання заборонені'
+                member_chat = await bot.get_chat_member(
+                    chat_id=c_id, user_id=message.from_user.id
+                )
+                if member_chat.status in ADMIN_STATUSES:
+                    pass  # все ок адмінам можна
+                else:
+                    member = await bot.get_chat_member(
+                        chat_id=channel_id, user_id=message.from_user.id
+                    )
+                    if member.status in ADMIN_STATUSES:
+                        pass
+                    else:
+                        await safe_delete(message)
+                        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                        return  # Чат чистий, далі не йдемо
+            except Exception:
+                await safe_delete(message)
+                asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                return  # Чат чистий, далі не йдемо
+
+        ###################
+        # Запис або оновлення паспорта
+        await fl.register_or_update_passport(db, u_id, user_full_name, username)
         # перевірка чи є в базі як підписник каналу ?
         status = await fl.check_sub(db, u_id, channel_id)
         if status:
@@ -207,32 +216,28 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
                     return  # рештиа не має сенсу
                 else:
-                    if c_id == -1001432792421:
+                    if voting_buttons == 0:
                         return
-                    else:
-                        work_m_id = await message.reply(
-                            "⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇",
-                            reply_markup=get_vote_keyboard(),
-                        )
-                        # записуємо в базу данних ТИМЧАСОВИЙ запис на період голосування. передаємо необхідну інфу
-                        await db.execute(
-                            "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
-                            (c_id, message.message_id, u_id, work_m_id.message_id),
-                        )
-                        await db.commit()
-                        pass
+                    work_m_id = await message.reply(
+                        "⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇",
+                        reply_markup=get_vote_keyboard(),
+                    )
+                    # записуємо в базу данних ТИМЧАСОВИЙ запис на період голосування. передаємо необхідну інфу
+                    await db.execute(
+                        "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
+                        (c_id, message.message_id, u_id, work_m_id.message_id),
+                    )
+                    await db.commit()
             else:
                 print("Перевірка пройдена: підписаний довше ніж 2 хв")
-                # тут з часм варто додати персоналізовані функції для кожного каналу.
-                # після створення адмін кабінету
-                pass
+            # тут будуть функції які адмін може вмикати вимикати
+
         else:  # в базі нема запису про підписку на канал чи чат
             # Запит в тг чи підписаний НА КАНАЛ
             member = await bot.get_chat_member(
                 chat_id=channel_id, user_id=message.from_user.id
             )
             if member.status in GOOD_STATUSES:
-                # Підписаний вже в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
                 await fl.old_member(db, u_id, channel_id)
             else:  # перевірка підписки на ЧАТ
                 member = await bot.get_chat_member(
@@ -252,17 +257,23 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
         linked_id = chat_info.linked_chat_id
 
         if linked_id:  # якщо отримали ід створюемо пару в базу
-            c = await db.cursor()
-            await c.execute(
-                # Додаємо OR IGNORE сюди:
-                "INSERT OR IGNORE INTO chat_links (chat_id, channel_id) VALUES (?, ?)",
-                (c_id, int(linked_id)),
-            )
-            await db.commit()
+            try:
+                real_owner_id = await fl.get_channel_owner(bot, linked_id)
+                c = await db.cursor()
+                await c.execute(
+                    # Додаємо OR IGNORE сюди:
+                    "INSERT OR IGNORE INTO chat_links (chat_id, channel_id, owner_id) VALUES (?, ?, ?)",
+                    (c_id, int(linked_id), real_owner_id),
+                )
+                await db.commit()
+            except Exception as e:
+                print(
+                    f"Помилка при отриманні ід власника {e}\nймовірно в бота недостатньо прав"
+                )
+                return
         else:
-            print(
-                "ТРЕБА ПРОДУМАТИ ПОМИЛКУ КОЛИ НЕМА ПОВЯЗАНОГО КАНАЛУ. АБО ТОДІ ЧАТ І Є ГОЛОВНИМ"
-            )
+            # якщо код тут то ймовірно це просто чат без каналу. поки бот для таких не працює
+            return
 
     ##################################
 

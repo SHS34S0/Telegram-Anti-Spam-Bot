@@ -2,7 +2,6 @@ import aiosqlite
 import re
 
 
-
 async def old_member(db, u_id, channel_id):
     await db.execute(
         "INSERT OR IGNORE INTO chat_stats (user_id, channel_id) VALUES (?, ?)",
@@ -24,12 +23,15 @@ async def register_or_update_passport(db, user_id, full_name, username):
     await db.commit()
 
 
-async def tandem_id(db, c_id):  # преевірка хто є канал чату (повертаємо id)
+async def get_chat_settings(db, c_id):  # преевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
-    await c.execute("SELECT channel_id FROM chat_links WHERE chat_id = ?", (c_id,))
-    channel_id = await c.fetchone()
-    if channel_id:  # знайшли канал ід
-        return channel_id[0]
+    await c.execute(
+        "SELECT channel_id, owner_id, voting_buttons, rus_language, stop_word FROM chat_links WHERE chat_id = ?",
+        (c_id,),
+    )
+    respond = await c.fetchone()
+    if respond:  # знайшли канал ід
+        return respond
     return None
 
 
@@ -118,3 +120,19 @@ def emoji_checker(message):
     except TypeError:  # все ок це не текст а гівка чи ще щось
         return 100
 
+
+from aiogram import Bot
+
+
+async def get_channel_owner(bot: Bot, channel_id: int):
+    try:
+        # список адмінів
+        admins = await bot.get_chat_administrators(chat_id=channel_id)
+        for admin in admins:
+            if admin.status == "creator":
+                return admin.user.id
+
+    except Exception as e:
+        print(f"Помилка {channel_id}: {e}")
+
+    return None

@@ -1,11 +1,9 @@
--- 1. Глобальний профіль (тут лише 1 рядок на кожного юзера)
 CREATE TABLE "users_global" (
     "user_id" INTEGER PRIMARY KEY, -- Telegram ID
     "name" TEXT,
     "username" TEXT
 );
 
--- 2. Історія (сюди пише ТІЛЬКИ ТРИГЕР, коли міняється ім'я)
 CREATE TABLE "name_history" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER,
@@ -14,20 +12,24 @@ CREATE TABLE "name_history" (
     "change_date" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Статистика в чаті (тут дані для боротьби зі спамом)
 CREATE TABLE "chat_stats" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER,
     "channel_id" INTEGER,
-    -- якщо дата не відома по замовчуванню присвоюємо стасус "Старічок"
+    -- if the date is not known, by default we assign the status "Old Man"
     "join_date" TIMESTAMP DEFAULT '2000-12-31', 
     "msg_count" INTEGER DEFAULT 0,
-    UNIQUE("user_id", "channel_id") -- щоб не було дублікатів юзера в одному чаті
+    UNIQUE("user_id", "channel_id")
 );
 
 CREATE TABLE "chat_links" (
-    "chat_id" INTEGER PRIMARY KEY,   -- ID групи (коментарів)
-    "channel_id" INTEGER NOT NULL    -- ID каналу (основного)
+    "chat_id" INTEGER PRIMARY KEY,
+    "channel_id" INTEGER NOT NULL,
+    "owner_id" INTEGER,
+    "voting_buttons" INTEGER DEFAULT 1 CHECK ("voting_buttons" IN (0,1)),
+    "rus_language" INTEGER DEFAULT 0 CHECK ("rus_language" IN (0,1)),
+    "stop_word" INTEGER DEFAULT 0 CHECK ("voting_buttons" IN (0,1))
+
 );
 
 CREATE TABLE "votings" (
@@ -41,11 +43,12 @@ CREATE TABLE "votings" (
 );
 
 CREATE TABLE "votes_log" (
-    "voting_m_id" INTEGER, -- ID повідомлення з кнопками
-    "voter_id" INTEGER,    -- ID того, хто натиснув кнопку
+    "voting_m_id" INTEGER, -- Message ID with buttons
+    "voter_id" INTEGER,    -- ID of the person who pressed the button
     UNIQUE("voting_m_id", "voter_id")
 );
----
+
+--- this may come in handy later
 CREATE TRIGGER "track_name_changes"
 BEFORE UPDATE ON "users_global"
 FOR EACH ROW
