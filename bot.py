@@ -21,6 +21,7 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest
+import filters as fl
 
 TOKEN = config.TOKEN
 VOITS = 3
@@ -28,138 +29,13 @@ BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
 GOOD_STATUSES = {"member", "administrator", "creator"}
 ##########################################################
-
-
-async def old_member(db, u_id, channel_id):
-    await db.execute(
-        "INSERT OR IGNORE INTO chat_stats (user_id, channel_id) VALUES (?, ?)",
-        (u_id, channel_id),
-    )
-    await db.commit()
-
-
-async def register_or_update_passport(db, user_id, full_name, username):
-    await db.execute(
-        "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
-        (user_id, full_name, username),
-    )
-    # Цей апдейт потрібен, щоб оновлювати зміну імені
-    await db.execute(
-        "UPDATE users_global SET name = ?, username = ? WHERE user_id = ?",
-        (full_name, username, user_id),
-    )
-    await db.commit()
-
-
-async def tandem_id(db, c_id):  # преевірка хто є канал чату (повертаємо id)
-    c = await db.cursor()
-    await c.execute("SELECT channel_id FROM chat_links WHERE chat_id = ?", (c_id,))
-    channel_id = await c.fetchone()
-    if channel_id:  # знайшли канал ід
-        return channel_id[0]
-    return None
-
-
-# перевірка чи в базі є запис як підписник
-async def check_sub(db, user_id, channel_id):
-    c = await db.cursor()
-    await c.execute(
-        "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ?",
-        (user_id, channel_id),
-    )
-    check_status = await c.fetchone()
-    if check_status:  # Якщо є в базі як підписник каналу
-        return check_status is not None
-
-
-def has_weird_chars(text):
-    # Шукаємо специфічні символи
-    weird_pattern = r"[ʜᴋᴀᴏʙʏɪᴍɴʟᴜꜰᴇᴘ]"
-    if re.search(weird_pattern, text, re.IGNORECASE):
-        return True
-    return False
-
-
-###### перевіряємо чи підписаний хочаб 2 хв
-# можливо якщо ще десь буду використовувати треба час в хв передавати як аргумент.
-# поки не чіпати
-async def check_join_date(db, user_id, channel_id):
-    c = await db.cursor()  # 1. Створили курсор
-    await c.execute(  # Виконали запит через ЦЕЙ курсор
-        "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ? AND join_date >= datetime('now', '-2 minutes')",
-        (user_id, channel_id),
-    )
-    result = await c.fetchone()  # Дістали результат
-    return result is not None
-
-
-##########
-async def voting(db, m_id, voter_id):
-    try:  # Пробуємо додати запис про голос
-        await db.execute(
-            "INSERT INTO votes_log (voting_m_id, voter_id) VALUES (?, ?)",
-            (m_id, voter_id),
-        )  # UNIQUE SQL
-        await db.commit()  # Якщо ми тут юзер голосує вперше
-        return True
-    except aiosqlite.IntegrityError:  # якщо двічі голосуватиме
-        return False
-
-
-async def clear_voting(db, m_id):
-    await db.execute("DELETE FROM votings WHERE work_m_id = ?", (m_id,))
-    await db.execute("DELETE FROM votes_log WHERE voting_m_id = ?", (m_id,))
-    await db.commit()
-
-
-def emoji_checker(message):
-    ALLOWED = set(
-        "абвгґдеєжзиіїйклмнопрстуфхцчшщьюяАБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?,. "
-    )
-    try:
-        total_len = len(message)
-
-        if total_len < 25:
-            return 100  # Малі повідомлення не чіпаємо
-
-        clean_count = 0
-        for char in message:
-            if char in ALLOWED:
-                clean_count += 1
-
-        ratio = (clean_count * 100) / total_len
-
-        # ДИНАМІЧНА ЛОГІКА
-        # Якщо повідомлення короткедо 100 символів
-        if total_len < 100:
-            if ratio >= 60:  # Дозволяємо більше смайлів
-                return 100
-            else:
-                return ratio  # Повертаємо реальний низький бал
-
-        # Якщо повідомлення довге > 100
-        else:
-            if ratio >= 85:  # Вимагаємо чистоти
-                return 100
-            else:
-                return ratio
-    except TypeError:  # все ок це не текст а гівка чи ще щось
-        return 100
-
-
 async def safe_delete(message):
-    """Видаляє повідомлення. Якщо його вже нема то просто мовчить."""
     try:
         await message.delete()
     except Exception:
         pass
 
-
 async def safe_ban(message, u_id, sec=0):
-    """
-    sec = 0 -> Бан назавжди
-    sec > 0 -> Бан на кількість секунд
-    """
     try:
         if sec > 0:
             # Бан на час
@@ -174,9 +50,6 @@ async def safe_ban(message, u_id, sec=0):
     except Exception as e:
         # Ловимо помилки (наприклад, бот не адмін)
         print(f"Ban error: {e}")
-
-
-########################################
 async def send_timed_msg(bot, chat_id, text, delay=60):
     try:
         msg = await bot.send_message(chat_id=chat_id, text=text)
@@ -184,7 +57,6 @@ async def send_timed_msg(bot, chat_id, text, delay=60):
         await safe_delete(msg)
     except Exception:
         pass
-
 
 ###################################################################
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
@@ -204,14 +76,14 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 
     # Якщо вступ був в чат ми шукаемо пару каналу ід і повертаємо канал ід
     # якщо вступ був в канал ми не знайдемо пару
-    channel_id = await tandem_id(db, c_id)
+    channel_id = await fl.tandem_id(db, c_id)
     if not channel_id:  # пара не була знайдена
         # значить c_id = event.chat.id отримав ід каналу
         channel_id = c_id
 
     print(f"Юзер {user_id} ({full_name}) вступив у канал {channel_id}")
 
-    await register_or_update_passport(db, user_id, full_name, username)
+    await fl.register_or_update_passport(db, user_id, full_name, username)
     await db.execute(
         """
         INSERT INTO chat_stats (user_id, channel_id, join_date) 
@@ -227,8 +99,9 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 #####
 @dp.message(CommandStart())  # /start
 async def command_start_handler(message: Message) -> None:
-    await message.answer(f"Hello, {html.bold(message.from_user.full_name)}!")
-
+    text = f"👋 <b>Вітаю, {html.bold(message.from_user.full_name)}!</b>\n" + config.TEXT
+    if message.chat.title == None:
+        await message.answer(text)
 
 ############
 @dp.message()
@@ -248,18 +121,21 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     user_full_name = message.from_user.full_name
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
-    channel_id = await tandem_id(db, c_id)
+    channel_id = await fl.tandem_id(db, c_id)
 
-    # emoji spam
-    kef = emoji_checker(message.text)
+    ## Перевірк на шлюхосимволи
+    if message.text and fl.has_weird_chars(message.text):
+        reason_text = f"🛡 Користувач {user_full_name} більше не покаже свій 🍑"
+        await safe_delete(message)  # Безпечне видалення
+        await safe_ban(message, u_id)
+        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+        return
 
-    # 75% тексту - це нормально для живого спілкування
-    # Твій код перевірки
+    kef = fl.emoji_checker(message.text)
     reas_text = f"🛡 Користувач {user_full_name} був заблокований за спам."
     if kef >= 90:
         pass
     elif kef >= 70:
-        # Безпечне видалення
         await safe_delete(message)
         await safe_ban(message, u_id, BAN24)
         asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
@@ -271,15 +147,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
         asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
         return
 
-    ## Перевірк на шлюхосимволи
-    if message.text and has_weird_chars(message.text):
-        reason_text = f"🛡 Користувач {user_full_name} більше не покаже свій 🍑"
-        await safe_delete(message)
-        await safe_ban(message, u_id)
-        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
-        return  # Зупиняємо все інше
-
-    # превірка посилань та гіперпосилань
     bad_types = {"mention", "url", "text_link"}
     if message.entities and any(e.type in bad_types for e in message.entities):
         try:  # Якщо було спрацювання
@@ -306,14 +173,13 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 
     ###################
     # Запис або оновлення паспорта
-    await register_or_update_passport(db, u_id, user_full_name, username)
-
+    await fl.register_or_update_passport(db, u_id, user_full_name, username)
     #################---------------------------------------------------------------------------перевірка чи підписник каналу
     # якщо channel_id не існує це не страшно. це ситуація коли бота в канал щойно додали.
     # він створить пару першим повідомленням в чаті. і з другого воно буде спрацьовувати
     if channel_id:  #  ід пару отрималои робимо далі преевірки
         # перевірка чи є в базі як підписник каналу ?
-        status = await check_sub(db, u_id, channel_id)
+        status = await fl.check_sub(db, u_id, channel_id)
         if status:
             await db.execute(
                 "UPDATE chat_stats SET msg_count = msg_count + 1 WHERE user_id = ? AND channel_id = ?",
@@ -323,7 +189,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             # після +1 до повідомлення починаємо преевірки
 
             # термін протягом якого підписаний користувач на канал.
-            is_young = await check_join_date(db, u_id, channel_id)  # SQL
+            is_young = await fl.check_join_date(db, u_id, channel_id)  # SQL
 
             if is_young:
                 has_media = (
@@ -341,17 +207,20 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
                     return  # рештиа не має сенсу
                 else:
-                    work_m_id = await message.reply(
-                        "⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇",
-                        reply_markup=get_vote_keyboard(),
-                    )
-                    # записуємо в базу данних ТИМЧАСОВИЙ запис на період голосування. передаємо необхідну інфу
-                    await db.execute(
-                        "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
-                        (c_id, message.message_id, u_id, work_m_id.message_id),
-                    )
-                    await db.commit()
-                    pass
+                    if c_id == -1001432792421:
+                        return
+                    else:
+                        work_m_id = await message.reply(
+                            "⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇",
+                            reply_markup=get_vote_keyboard(),
+                        )
+                        # записуємо в базу данних ТИМЧАСОВИЙ запис на період голосування. передаємо необхідну інфу
+                        await db.execute(
+                            "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
+                            (c_id, message.message_id, u_id, work_m_id.message_id),
+                        )
+                        await db.commit()
+                        pass
             else:
                 print("Перевірка пройдена: підписаний довше ніж 2 хв")
                 # тут з часм варто додати персоналізовані функції для кожного каналу.
@@ -364,13 +233,13 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             )
             if member.status in GOOD_STATUSES:
                 # Підписаний вже в базі (значить старічок база дасть дефолтну дату приеднання з минулого)
-                await old_member(db, u_id, channel_id)
+                await fl.old_member(db, u_id, channel_id)
             else:  # перевірка підписки на ЧАТ
                 member = await bot.get_chat_member(
                     chat_id=c_id, user_id=message.from_user.id
                 )
                 if member.status in GOOD_STATUSES:
-                    await old_member(db, u_id, channel_id)
+                    await fl.old_member(db, u_id, channel_id)
                 else:
                     print("Не підписаний взагалі ніде")
                     # я не впевнений чи це можливо враховуючи обмеження телеграму
@@ -421,7 +290,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
     vote_result = callback.data
     c = await db.cursor()
     # перевірка чи перший раз голосує
-    first_voiting = await voting(db, m_id, voter_id)
+    first_voiting = await fl.voting(db, m_id, voter_id)
 
     ###########################
     if vote_result == "vote_bot":
@@ -445,7 +314,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 print("ban")
                 try:
                     # повідомлення де спам
-                    await clear_voting(db, m_id)
+                    await fl.clear_voting(db, m_id)
                     await callback.bot.delete_message(chat_id=ban[0], message_id=ban[1])
                 except Exception:
                     pass
@@ -462,7 +331,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 # текст з правильним ід та іменем
                 log_text = f'Користувачі вирішили, що <a href="tg://user?id={ban[2]}">{spammer_name}</a> 🤖 Бот.'
                 # інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закадаємо туди інфу про спамера
-                await clear_voting(db, m_id)
+                await fl.clear_voting(db, m_id)
                 await callback.message.edit_text(
                     log_text,
                     reply_markup=get_vote_keyboard(),
@@ -474,7 +343,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
 
                 asyncio.create_task(_wait_kill())
             elif ban[5] >= VOITS:  # людина
-                await clear_voting(db, m_id)
+                await fl.clear_voting(db, m_id)
                 await callback.message.delete()
 
             else:
@@ -502,7 +371,7 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
         ban = await c.fetchone()
 
         if ban and ban[5] >= VOITS:  # Якщо 3 голоси за людину
-            await clear_voting(db, m_id)
+            await fl.clear_voting(db, m_id)
             await safe_delete(callback.message)
         elif ban:
             # Оновлюємо текст, щоб бачити прогрес і в "людських" голосах
