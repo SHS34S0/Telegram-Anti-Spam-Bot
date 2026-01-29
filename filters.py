@@ -1,5 +1,83 @@
 import aiosqlite
 import re
+import os
+from nudenet import NudeDetector
+import asyncio
+import time
+import os
+import asyncio
+from nudenet import NudeDetector
+
+# ініціалізація детектора
+try:
+    _nude_detector = NudeDetector()
+except Exception as e:
+    print(f"⚠️ Помилка запуску NudeNet: {e}")
+    _nude_detector = None
+
+# 0.60
+BAN_LIST = {
+    # гола шкіра
+    "FEMALE_GENITALIA_EXPOSED",
+    "MALE_GENITALIA_EXPOSED",
+    "BUTTOCKS_EXPOSED",
+    "ANUS_EXPOSED",
+    "FEMALE_BREAST_EXPOSED",
+    "MALE_BREAST_EXPOSED",
+    # замануха
+    "FEMALE_BREAST_COVERED",
+    "BUTTOCKS_COVERED",
+    "FEMALE_GENITALIA_COVERED",
+}
+
+
+async def check_user_avatar(bot, user_id: int) -> bool:
+    # Якщо детектор не запустився, пропускаємо юзера 
+    if _nude_detector is None:
+        return False
+
+    file_path = f"temp_avatar_{user_id}.jpg"
+
+    try:
+        # взяти фото профілю
+        photos = await bot.get_user_profile_photos(user_id, limit=1)
+
+        # Якщо фото немає все ок
+        if not photos.total_count:
+            return False
+
+        # останне фото
+        photo_file_id = photos.photos[0][-1].file_id
+
+        # скакачати файл
+        file = await bot.get_file(photo_file_id)
+        await bot.download_file(file.file_path, file_path)
+
+        # Отримуємо поточний цикл подій
+        loop = asyncio.get_running_loop()
+        # Запускаємо в окремому потоці
+        detections = await loop.run_in_executor(None, _nude_detector.detect, file_path)
+
+        for item in detections:
+            label = item["class"]
+            score = item["score"]
+
+            # Твій поріг 0.60
+            if label in BAN_LIST and score > 0.60:
+                return True  # БАН
+
+    except Exception as e:
+        print(f"Помилка перевірки аватара {user_id}: {e}")
+
+    finally:
+        # видалення файлу
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    return False
+
+
+######################
 
 
 async def old_member(db, u_id, channel_id):
@@ -87,18 +165,18 @@ async def clear_voting(db, m_id):
     await db.commit()
 
 
-def emoji_checker(message):
+def emoji_checker(text):
     ALLOWED = set(
         "абвгґдеєжзиіїйклмнопрстуфхцчшщьюяАБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?,. "
     )
     try:
-        total_len = len(message)
+        total_len = len(text)
 
         if total_len < 25:
             return 100  # Малі повідомлення не чіпаємо
 
         clean_count = 0
-        for char in message:
+        for char in text:
             if char in ALLOWED:
                 clean_count += 1
 
@@ -136,3 +214,52 @@ async def get_channel_owner(bot: Bot, channel_id: int):
         print(f"Помилка {channel_id}: {e}")
 
     return None
+
+
+async def check_user_bio(bot, user_id):
+    try:
+        chat_info = await bot.get_chat(user_id)
+        bio = chat_info.bio
+
+        if not bio:
+            return False  # Біо немає - все ок
+
+        # всі посилання
+        # link_pattern = r"(https?://|www\.|t\.me/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})"
+        # Ловить тільки посилання на ТГ
+        link_pattern = r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/"
+
+        if re.search(link_pattern, bio):
+            return True  # Знайшли сміття
+
+    except Exception:
+        pass  # Якщо не вдалось отримати профіль - не банимо
+
+    return False  # Все чисто
+
+
+async def mass_blocking(bot, db, user_id, ignore_chat_id):
+    try:
+        async with db.execute(
+            "SELECT chat_id FROM chat_links WHERE chat_id != ?", (ignore_chat_id,)
+        ) as cursor:
+            all_chats = await cursor.fetchall()
+
+        if not all_chats:
+            return
+
+        print(f"Починаю мас-бан юзера {user_id} у {len(all_chats)} чатах...")
+        for row in all_chats:
+            target_chat_id = row[
+                0
+            ]  # Результат це список кортежів [(123,), (456,)], беремо [0]
+            try:
+                await bot.ban_chat_member(chat_id=target_chat_id, user_id=user_id)
+                print(f"Забанено в чаті {target_chat_id}")
+            except Exception as e:
+                print(f"Не вдалось забанити в {target_chat_id}: {e}")
+    except Exception as e:
+        print(f"Помилка в mass_blocking: {e}")
+
+
+######################################
