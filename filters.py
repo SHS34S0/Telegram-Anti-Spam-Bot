@@ -14,7 +14,7 @@ try:
 except Exception as e:
     print(f"⚠️ Помилка запуску NudeNet: {e}")
     _nude_detector = None
-
+_nude_semaphore = asyncio.Semaphore(2) # кількість потоків
 # 0.60
 BAN_LIST = {
     # гола шкіра
@@ -32,7 +32,7 @@ BAN_LIST = {
 
 
 async def check_user_avatar(bot, user_id: int) -> bool:
-    # Якщо детектор не запустився, пропускаємо юзера 
+    # Якщо детектор не запустився, пропускаємо юзера
     if _nude_detector is None:
         return False
 
@@ -56,13 +56,13 @@ async def check_user_avatar(bot, user_id: int) -> bool:
         # Отримуємо поточний цикл подій
         loop = asyncio.get_running_loop()
         # Запускаємо в окремому потоці
-        detections = await loop.run_in_executor(None, _nude_detector.detect, file_path)
+        async with _nude_semaphore:
+            detections = await loop.run_in_executor(None, _nude_detector.detect, file_path)
 
         for item in detections:
             label = item["class"]
             score = item["score"]
 
-            # Твій поріг 0.60
             if label in BAN_LIST and score > 0.60:
                 return True  # БАН
 
@@ -75,17 +75,6 @@ async def check_user_avatar(bot, user_id: int) -> bool:
             os.remove(file_path)
 
     return False
-
-
-######################
-
-
-async def old_member(db, u_id, channel_id):
-    await db.execute(
-        "INSERT OR IGNORE INTO chat_stats (user_id, channel_id) VALUES (?, ?)",
-        (u_id, channel_id),
-    )
-    await db.commit()
 
 
 async def register_or_update_passport(db, user_id, full_name, username):
@@ -104,25 +93,13 @@ async def register_or_update_passport(db, user_id, full_name, username):
 async def get_chat_settings(db, c_id):  # преевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
     await c.execute(
-        "SELECT channel_id, owner_id, voting_buttons, rus_language, stop_word FROM chat_links WHERE chat_id = ?",
+        "SELECT owner_id, voting_buttons, rus_language, stop_word FROM chat_links WHERE chat_id = ?",
         (c_id,),
     )
     respond = await c.fetchone()
     if respond:  # знайшли канал ід
         return respond
     return None
-
-
-# перевірка чи в базі є запис як підписник
-async def check_sub(db, user_id, channel_id):
-    c = await db.cursor()
-    await c.execute(
-        "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ?",
-        (user_id, channel_id),
-    )
-    check_status = await c.fetchone()
-    if check_status:  # Якщо є в базі як підписник каналу
-        return check_status is not None
 
 
 def has_weird_chars(text):
@@ -133,13 +110,10 @@ def has_weird_chars(text):
     return False
 
 
-###### перевіряємо чи підписаний хочаб 2 хв
-# можливо якщо ще десь буду використовувати треба час в хв передавати як аргумент.
-# поки не чіпати
-async def check_join_date(db, user_id, channel_id):
+async def msg_count(db, user_id, channel_id):
     c = await db.cursor()  # 1. Створили курсор
     await c.execute(  # Виконали запит через ЦЕЙ курсор
-        "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ? AND join_date >= datetime('now', '-2 minutes')",
+        "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ? AND msg_count > 0",
         (user_id, channel_id),
     )
     result = await c.fetchone()  # Дістали результат
@@ -250,6 +224,7 @@ async def mass_blocking(bot, db, user_id, ignore_chat_id):
 
         print(f"Починаю мас-бан юзера {user_id} у {len(all_chats)} чатах...")
         for row in all_chats:
+            await asyncio.sleep(0.9)
             target_chat_id = row[
                 0
             ]  # Результат це список кортежів [(123,), (456,)], беремо [0]

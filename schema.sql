@@ -15,6 +15,7 @@ CREATE TABLE "name_history" (
 CREATE TABLE "chat_stats" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER,
+    -- channels or groups
     "channel_id" INTEGER,
     -- if the date is not known, by default we assign the status "Old Man"
     "join_date" TIMESTAMP DEFAULT '2000-12-31', 
@@ -24,9 +25,8 @@ CREATE TABLE "chat_stats" (
 
 CREATE TABLE "chat_links" (
     "chat_id" INTEGER PRIMARY KEY,
-    "channel_id" INTEGER NOT NULL,
     "owner_id" INTEGER,
-    "voting_buttons" INTEGER DEFAULT 1 CHECK ("voting_buttons" IN (0,1)),
+    "voting_buttons" INTEGER DEFAULT 0 CHECK ("voting_buttons" IN (0,1)),
     "rus_language" INTEGER DEFAULT 0 CHECK ("rus_language" IN (0,1)),
     "stop_word" INTEGER DEFAULT 0 CHECK ("voting_buttons" IN (0,1))
 
