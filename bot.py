@@ -30,6 +30,8 @@ TOKEN = config.TOKEN
 VOITS = 3
 BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
+
+# варто прееконатись чи то ще треба 
 GOOD_STATUSES = {"member", "administrator", "creator"}
 
 
@@ -465,8 +467,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             if message.text and rus_language == 1:
 
                 reason_text = f"🛡 {user_full_name}, я видалив ваше повідомлення, оскільки в цьому чаті не пишуть російською. "
-                status = fl.rus_language(message.text)
-                if status == 50:
+                if fl.rus_language(message.text):
                     await safe_delete(message)
                     asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
 

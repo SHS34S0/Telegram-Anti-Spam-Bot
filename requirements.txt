@@ -1,4 +1,5 @@
-pip install nudenet
-pip install aiosqlite
-pip install aiogram
-pip install async-lru
+nudenet
+aiosqlite
+aiogram
+async-lru
+pytest

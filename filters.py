@@ -38,7 +38,7 @@ MUTE_LIST = {
 }
 
 @alru_cache(maxsize=5000)
-async def check_user_avatar(bot, user_id: int) -> bool:
+async def check_user_avatar(bot, user_id: int):
     # Якщо детектор не запустився, пропускаємо юзера
     if _nude_detector is None:
         return False
@@ -255,7 +255,6 @@ def rus_language(text):
             return True
     words = {
         "что",
-        "это",
         "как",
         "или",
         "если",
@@ -277,9 +276,6 @@ def rus_language(text):
         "человек",
         "жизнь",
         "такой",
-        "этот",
-        "эта",
-        "эти",
         "могу",
         "понимаю",
         "должен",
