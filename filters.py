@@ -7,6 +7,10 @@ import time
 import os
 import asyncio
 from nudenet import NudeDetector
+from async_lru import alru_cache
+import config
+
+CACHE_SETTINGS = {}
 
 # ініціалізація детектора
 try:
@@ -14,7 +18,7 @@ try:
 except Exception as e:
     print(f"⚠️ Помилка запуску NudeNet: {e}")
     _nude_detector = None
-_nude_semaphore = asyncio.Semaphore(2) # кількість потоків
+_nude_semaphore = asyncio.Semaphore(2)  # кількість потоків
 # 0.60
 BAN_LIST = {
     # гола шкіра
@@ -24,13 +28,16 @@ BAN_LIST = {
     "ANUS_EXPOSED",
     "FEMALE_BREAST_EXPOSED",
     "MALE_BREAST_EXPOSED",
+}
+
+MUTE_LIST = {
     # замануха
     "FEMALE_BREAST_COVERED",
     "BUTTOCKS_COVERED",
     "FEMALE_GENITALIA_COVERED",
 }
 
-
+@alru_cache(maxsize=5000)
 async def check_user_avatar(bot, user_id: int) -> bool:
     # Якщо детектор не запустився, пропускаємо юзера
     if _nude_detector is None:
@@ -57,14 +64,18 @@ async def check_user_avatar(bot, user_id: int) -> bool:
         loop = asyncio.get_running_loop()
         # Запускаємо в окремому потоці
         async with _nude_semaphore:
-            detections = await loop.run_in_executor(None, _nude_detector.detect, file_path)
+            detections = await loop.run_in_executor(
+                None, _nude_detector.detect, file_path
+            )
 
         for item in detections:
             label = item["class"]
             score = item["score"]
 
             if label in BAN_LIST and score > 0.60:
-                return True  # БАН
+                return 100  # БАН
+            if label in MUTE_LIST and score > 0.80:
+                return 50  # МУТ
 
     except Exception as e:
         print(f"Помилка перевірки аватара {user_id}: {e}")
@@ -90,6 +101,7 @@ async def register_or_update_passport(db, user_id, full_name, username):
     await db.commit()
 
 
+@alru_cache(maxsize=1000)
 async def get_chat_settings(db, c_id):  # преевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
     await c.execute(
@@ -110,6 +122,7 @@ def has_weird_chars(text):
     return False
 
 
+@alru_cache(maxsize=5000)
 async def msg_count(db, user_id, channel_id):
     c = await db.cursor()  # 1. Створили курсор
     await c.execute(  # Виконали запит через ЦЕЙ курсор
@@ -189,7 +202,7 @@ async def get_channel_owner(bot: Bot, channel_id: int):
 
     return None
 
-
+@alru_cache(maxsize=5000)
 async def check_user_bio(bot, user_id):
     try:
         chat_info = await bot.get_chat(user_id)
@@ -198,9 +211,6 @@ async def check_user_bio(bot, user_id):
         if not bio:
             return False  # Біо немає - все ок
 
-        # всі посилання
-        # link_pattern = r"(https?://|www\.|t\.me/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})"
-        # Ловить тільки посилання на ТГ
         link_pattern = r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/"
 
         if re.search(link_pattern, bio):
@@ -215,7 +225,8 @@ async def check_user_bio(bot, user_id):
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ?", (ignore_chat_id,)
+            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+            (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -235,6 +246,96 @@ async def mass_blocking(bot, db, user_id, ignore_chat_id):
                 print(f"Не вдалось забанити в {target_chat_id}: {e}")
     except Exception as e:
         print(f"Помилка в mass_blocking: {e}")
+
+
+def rus_language(text):
+
+    for i in text.lower():
+        if i in ["ы", "э", "ъ", "ё"]:
+            return True
+    words = {
+        "что",
+        "это",
+        "как",
+        "или",
+        "если",
+        "почему",
+        "вот",
+        "только",
+        "здесь",
+        "сейчас",
+        "теперь",
+        "никогда",
+        "очень",
+        "когда",
+        "где",
+        "нет",
+        "конечно",
+        "наверное",
+        "пожалуйста",
+        "спасибо",
+        "человек",
+        "жизнь",
+        "такой",
+        "этот",
+        "эта",
+        "эти",
+        "могу",
+        "понимаю",
+        "должен",
+        "нужен",
+        "говоря",
+        "личку",
+        "работа",
+        "нужен",
+        "каждую",
+    }
+
+    have = words & set(text.lower().split())
+    if have:
+        return True
+
+
+def check_card(text):
+    # все що не цифра замінити на пустоту
+    clean_text = re.sub(r'\D', '', text)
+    possible_cards = re.findall(r'\d{16}', clean_text)
+    if not possible_cards:
+        return False
+    for number in possible_cards:
+        if luhn_check(number):
+            return True
+def luhn_check(card_number):
+    sum_ = 0
+    parity = len(card_number) % 2
+    for i, digit in enumerate(card_number):
+        digit = int(digit)
+        if i % 2 == parity:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        sum_ += digit
+    return sum_ % 10 == 0
+
+
+# повертаємо або номер ДС або хеш якщо ДС нам не відомо
+@alru_cache(maxsize=5000)
+async def check_dc_number(bot, u_id):
+    photos = await bot.get_user_profile_photos(u_id, limit=1)
+    photo_hash = "Відсутнє"
+    if photos.total_count > 0:
+        photo = photos.photos[0][-1]
+        photo_file_id = photos.photos[0][-1].file_id  # найбільший розмір
+        suffix = photo.file_unique_id[-3:]
+        if suffix in config.dc_5:
+            return 5
+        if suffix in config.dc_1:
+            return 1
+        if suffix in config.dc_2:
+            return 2
+        if suffix in config.dc_4:
+            return 4
+        return photo.file_unique_id
 
 
 ######################################
