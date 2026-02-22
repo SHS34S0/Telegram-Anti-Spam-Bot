@@ -8,10 +8,34 @@ import os
 import asyncio
 from nudenet import NudeDetector
 from async_lru import alru_cache
-import config
+import json
+import imagehash
+import io
+from PIL import Image
+import aiosqlite
+import base64
 
-CACHE_SETTINGS = {}
+#######################################################
+with open("dc.json", "r", encoding="utf-8") as f:
+    DC_DICT = json.load(f)
+########################################################
 
+
+THRESHOLD = 5
+PHOTO_HASH = {}
+
+
+async def load_hashes(db: aiosqlite.Connection):
+    PHOTO_HASH.clear()  # Очищаємо перед завантаженням (на всякий випадок)
+    async with db.execute("SELECT hash FROM photo_hash") as cursor:
+        rows = await cursor.fetchall()
+        for row in rows:
+            hash_text = row[0]
+            PHOTO_HASH[imagehash.hex_to_hash(hash_text)] = True
+    print(f"✅ Завантажено {len(PHOTO_HASH)} хешів у словник фільтрів.")
+
+
+##########################################################################
 # ініціалізація детектора
 try:
     _nude_detector = NudeDetector()
@@ -37,7 +61,8 @@ MUTE_LIST = {
     "FEMALE_GENITALIA_COVERED",
 }
 
-@alru_cache(maxsize=5000)
+
+@alru_cache(maxsize=50000)
 async def check_user_avatar(bot, user_id: int):
     # Якщо детектор не запустився, пропускаємо юзера
     if _nude_detector is None:
@@ -105,7 +130,7 @@ async def register_or_update_passport(db, user_id, full_name, username):
 async def get_chat_settings(db, c_id):  # преевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
     await c.execute(
-        "SELECT owner_id, voting_buttons, rus_language, stop_word FROM chat_links WHERE chat_id = ?",
+        "SELECT owner_id, voting_buttons, rus_language, stop_word, stop_channel, stop_links, card_number, emoji_checker, reaction_spam FROM chat_links WHERE chat_id = ?",
         (c_id,),
     )
     respond = await c.fetchone()
@@ -122,7 +147,7 @@ def has_weird_chars(text):
     return False
 
 
-@alru_cache(maxsize=5000)
+@alru_cache(maxsize=50000)
 async def msg_count(db, user_id, channel_id):
     c = await db.cursor()  # 1. Створили курсор
     await c.execute(  # Виконали запит через ЦЕЙ курсор
@@ -202,16 +227,18 @@ async def get_channel_owner(bot: Bot, channel_id: int):
 
     return None
 
-@alru_cache(maxsize=5000)
+
+@alru_cache(maxsize=50000)
 async def check_user_bio(bot, user_id):
     try:
         chat_info = await bot.get_chat(user_id)
         bio = chat_info.bio
-
         if not bio:
             return False  # Біо немає - все ок
-
-        link_pattern = r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/"
+        # https://t.me/+
+        link_pattern = (
+            r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me\+|telegram\.dog)/\+"
+        )
 
         if re.search(link_pattern, bio):
             return True  # Знайшли сміття
@@ -222,6 +249,7 @@ async def check_user_bio(bot, user_id):
     return False  # Все чисто
 
 
+### ймовірно це тепер чисто рутовська фіча і треба прибрати звідси ?
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
@@ -294,13 +322,15 @@ def rus_language(text):
 
 def check_card(text):
     # все що не цифра замінити на пустоту
-    clean_text = re.sub(r'\D', '', text)
-    possible_cards = re.findall(r'\d{16}', clean_text)
+    clean_text = re.sub(r"\D", "", text)
+    possible_cards = re.findall(r"\d{16}", clean_text)
     if not possible_cards:
         return False
     for number in possible_cards:
         if luhn_check(number):
             return True
+
+
 def luhn_check(card_number):
     sum_ = 0
     parity = len(card_number) % 2
@@ -314,24 +344,52 @@ def luhn_check(card_number):
     return sum_ % 10 == 0
 
 
-# повертаємо або номер ДС або хеш якщо ДС нам не відомо
-@alru_cache(maxsize=5000)
+# Виносимо важку математику в окрему звичайну функцію
+def _calculate_phash(image_bytes):
+    return imagehash.phash(Image.open(image_bytes))
+
+
+# -------------------------------------------
+async def check_hash(bot, photo):
+    try:
+        file = await bot.get_file(photo.file_id)
+
+        photo_bytes = io.BytesIO()
+        await bot.download_file(file.file_path, photo_bytes)
+        photo_bytes.seek(0)
+
+        # Запускаємо генерацію хешу БЕЗ блокування основного бота
+        loop = asyncio.get_running_loop()
+        new_hash = await loop.run_in_executor(None, _calculate_phash, photo_bytes)
+
+        # Шукаємо збіг
+        for saved_hash in PHOTO_HASH.keys():
+            if new_hash - saved_hash <= THRESHOLD:
+                return True  # БАН
+
+    except Exception as e:
+        print(f"Помилка перевірки хешу: {e}")
+
+    return False
+
+
+@alru_cache(maxsize=50000)
 async def check_dc_number(bot, u_id):
     photos = await bot.get_user_profile_photos(u_id, limit=1)
-    photo_hash = "Відсутнє"
     if photos.total_count > 0:
         photo = photos.photos[0][-1]
-        photo_file_id = photos.photos[0][-1].file_id  # найбільший розмір
+        ##### тут треба звіряти хеш іншою функціею.
+        if await check_hash(bot, photo):
+            return 100
         suffix = photo.file_unique_id[-3:]
-        if suffix in config.dc_5:
-            return 5
-        if suffix in config.dc_1:
-            return 1
-        if suffix in config.dc_2:
-            return 2
-        if suffix in config.dc_4:
-            return 4
+        if DC_DICT.get(suffix):
+            return DC_DICT.get(suffix)
         return photo.file_unique_id
 
 
-######################################
+def is_good_mention(entities, message):
+    for e in entities:
+        if e.type == "mention":
+            mention_text = message[e.offset : e.offset + e.length]
+            if mention_text.lower() == "@admin":
+                return True

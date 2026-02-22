@@ -3,3 +3,5 @@ aiosqlite
 aiogram
 async-lru
 pytest
+ImageHash
+Pillow
