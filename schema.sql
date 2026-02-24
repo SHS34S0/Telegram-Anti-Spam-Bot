@@ -42,6 +42,14 @@ CREATE TABLE "photo_hash" (
     "hash" TEXT UNIQUE
 );
 
+CREATE TABLE "admins" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "chat_id" INTEGER NOT NULL,
+    "admin_id" INTEGER NOT NULL,
+    "status" INTEGER DEFAULT 0 CHECK ("status" IN (0,1)),
+    UNIQUE("chat_id", "admin_id")
+);   
+
 CREATE TABLE "votings" (
     "chat_id" INTEGER,
     "message_id" INTEGER,

@@ -80,23 +80,6 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
 
     loop = asyncio.get_running_loop()
     photo_phash = await loop.run_in_executor(None, _get_phash_str, bio)
-
-    # suffix = photo.file_unique_id[-3:]
-    # if fl.DC_DICT.get(suffix):
-    #     code_hash = fl.DC_DICT.get(suffix)
-    # code_hash = photo.file_unique_id
-
-########
-
-    # code_hash = "Невідомий DC"
-    # if suffix in config.dc_5:
-    #     code_hash = "DC 5"
-    # elif suffix in config.dc_1:
-    #     code_hash = "DC 1"
-    # elif suffix in config.dc_2:
-    #     code_hash = "DC 2"
-    # elif suffix in config.dc_4:
-    #     code_hash = "DC 4"
     clean_c_id = (
         str(c_id).replace("-100", "", 1) if str(c_id).startswith("-100") else str(c_id)
     )
