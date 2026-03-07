@@ -67,7 +67,7 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
         )
         return
 
-    # Якщо фото є, йдемо далі без зайвих відступів 
+    # Якщо фото є, йдемо далі без зайвих відступів
     photo = photos.photos[0][-1]
     photo_file_id = photo.file_id
     suffix = photo.file_unique_id[-3:]
@@ -100,6 +100,7 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
         parse_mode="HTML",
     )
 
+
 def moder_menu(user_id, photo_hash):
     builder = InlineKeyboardBuilder()
 
@@ -129,17 +130,25 @@ async def root_info(message: Message, bot: Bot, db):
     if c_id == config.root:
         user_full_name = message.from_user.full_name
         chat_name = message.chat.title or "Особисті повідомлення"
+        if message.text and message.text.isdigit():
+            await fl.mass_blocking(bot, db, int(message.text), 111)
 
-        await fl.mass_blocking(bot, db, int(message.text), 111)
+            await user_info(
+                bot,
+                c_id,
+                int(message.text),
+                user_full_name,
+                chat_name,
+                "Ручне блокування по ІД",
+            )
+        if message.text and message.text.lower() == "cache":
 
-        await user_info(
-            bot,
-            c_id,
-            int(message.text),
-            user_full_name,
-            chat_name,
-            "Ручне блокування по ІД",
-        )
+            await bot.send_message(
+                chat_id=str(config.root),
+                text=f"📊 КЕШ каналів: {fl.get_chat_settings.cache_info()}\n📊 КЕШ учасників: {fl.msg_count.cache_info()}\n📊 КЕШ DC: {fl.check_dc_number.cache_info()}\n📊 КЕШ Біо: {fl.check_user_bio.cache_info()}\n📊 КЕШ Фото: {fl.check_user_avatar.cache_info()}",
+                parse_mode="HTML",
+            )
+
         return
 
 
@@ -185,5 +194,4 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
 
         except Exception as e:
             print(f"Помилка оновлення словника: {e}")
-            await callback.answer(
-            )
+            await callback.answer()

@@ -6,6 +6,9 @@ def test_rus_language():
     assert rus_language("То були мы разом") == True
     assert rus_language("этот или тот") == True
     assert rus_language("ъ") == True
+    assert rus_language("ё") == True
+    assert rus_language("э") == True
+    assert rus_language("ы") == True
     assert rus_language("моё или твоё") == True
     assert rus_language("потому что") == True
     assert rus_language("как то так") == True

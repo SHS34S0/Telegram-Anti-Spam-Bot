@@ -5,7 +5,6 @@ from nudenet import NudeDetector
 import asyncio
 import time
 import os
-import asyncio
 from nudenet import NudeDetector
 from async_lru import alru_cache
 import json
@@ -13,8 +12,19 @@ import imagehash
 import io
 from PIL import Image
 import aiosqlite
-import base64
+import aiohttp
+import logging
 
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(
+    handlers=[
+        logging.FileHandler("my_log.log", encoding="utf-8"),  # Пише у файл
+        logging.StreamHandler(),  # Виводить у термінал
+    ],
+    level=logging.WARNING,
+    format="[%(asctime)s] [%(name)s] %(levelname)s (рядок %(lineno)d): %(message)s",
+)
 #######################################################
 with open("dc.json", "r", encoding="utf-8") as f:
     DC_DICT = json.load(f)
@@ -365,17 +375,39 @@ async def check_hash(bot, photo):
         # Шукаємо збіг
         for saved_hash in PHOTO_HASH.keys():
             if new_hash - saved_hash <= THRESHOLD:
+                logger.warning(f"HASH {saved_hash}")
                 return True  # БАН
 
     except Exception as e:
-        print(f"Помилка перевірки хешу: {e}")
-
+        logger.error(f"Помилка перевірки хешу: {e}")
     return False
+
+
+def massage_type_check(message):
+    if message.text:
+        return "text"
+    elif message.photo:
+        return "photo"
+    elif message.sticker:
+        return "sticker"
+    elif message.animation:
+        return "animation"
+    elif message.video:
+        return "video"
+    elif message.document:
+        return "document"
+    else:
+        return "other"
 
 
 @alru_cache(maxsize=50000)
 async def check_dc_number(bot, u_id):
     photos = await bot.get_user_profile_photos(u_id, limit=1)
+    # практика показала так буде краще
+    if photos.total_count == 0:
+        await asyncio.sleep(5)
+        photos = await bot.get_user_profile_photos(u_id, limit=1)
+
     if photos.total_count > 0:
         photo = photos.photos[0][-1]
         ##### тут треба звіряти хеш іншою функціею.
@@ -393,3 +425,39 @@ def is_good_mention(entities, message):
             mention_text = message[e.offset : e.offset + e.length]
             if mention_text.lower() == "@admin":
                 return True
+
+
+async def send_remote_log(message, logger_token, admin_id, text):
+    user = message.from_user
+    chat = message.chat
+
+    msg_link = (
+        message.get_url()
+        if chat.type in ["supergroup", "channel"]
+        else "ПП / Приватна група"
+    )
+
+    log_text = (
+        f"🚨 <b>{text}</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"👤 <b>Юзер:</b> {user.full_name} (<code>{user.id}</code>)\n"
+        f"📍 <b>Чат:</b> {chat.title}\n"
+        f"🔗 <a href='{msg_link}'>Посилання на пост</a>\n"
+        f"📝 <b>Текст:</b> <code>{message.text or 'Медіа/Інше'}</code>"
+    )
+
+    # HTTP
+    url = f"https://api.telegram.org/bot{logger_token}/sendMessage"
+    payload = {
+        "chat_id": admin_id,
+        "text": log_text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": False,  # Щоб бачити прев'ю посилання
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as response:
+                return await response.json()
+    except Exception as e:
+        print(f"Помилка відправки через зовнішнього бота: {e}")

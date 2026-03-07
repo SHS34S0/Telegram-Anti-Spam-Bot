@@ -12,6 +12,7 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 
 async def on_admin(db, chat_id, admin_id):
@@ -119,7 +120,7 @@ async def on_off_buttons(db, bot, chat_ids, feature):
                     text="ON", callback_data=f"on:{id}:{feature}", style="success"
                 ),
             )
-        except Exception as e:
+        except (TelegramForbiddenError, TelegramBadRequest) as e:
             # Видаляемо з бази
             c = await db.cursor()
             await c.execute(
@@ -127,6 +128,9 @@ async def on_off_buttons(db, bot, chat_ids, feature):
                 (id,),
             )
             await db.commit()
+            continue
+        except Exception as e:
+            print(f"Щось інше {e}")
             continue
     builder.add(
         InlineKeyboardButton(text="Назад", callback_data="my_settings"),
@@ -145,7 +149,7 @@ async def add_admin(db, bot, chat_ids):
                     text=name.title, callback_data=f"name_group:{id}", style="primary"
                 ),
             )
-        except Exception as e:
+        except (TelegramForbiddenError, TelegramBadRequest) as e:
             # Видаляемо з бази
             c = await db.cursor()
             await c.execute(
@@ -153,6 +157,9 @@ async def add_admin(db, bot, chat_ids):
                 (id,),
             )
             await db.commit()
+            continue
+        except Exception as e:
+            print(f"Щось інше {e}")
             continue
     builder.add(
         InlineKeyboardButton(text="Назад", callback_data="my_settings"),
@@ -269,7 +276,7 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         chat_id = int(result.split(":")[1])
         result = result.split(":")[2]
         member = await callback.bot.get_chat_member(chat_id, callback.from_user.id)
-        if member.status in ["administrator", "creator"]:
+        if member.status in ["administrator", "creator"] or callback.from_user.id == config.root:
             await edit_setting(db, chat_id, result, 1)
             await callback.message.edit_text(
                 f"status ввімкнено для чату {chat_id}", reply_markup=settings()
@@ -281,7 +288,7 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         chat_id = int(result.split(":")[1])
         result = result.split(":")[2]
         member = await callback.bot.get_chat_member(chat_id, callback.from_user.id)
-        if member.status in ["administrator", "creator"]:
+        if member.status in ["administrator", "creator"] or callback.from_user.id == config.root:
             await edit_setting(db, chat_id, result, 0)
             await callback.message.edit_text(
                 f"status вимкнено для чату {chat_id}", reply_markup=settings()
@@ -298,16 +305,16 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
     elif result.startswith("name_group:"):  
             chat_id = int(result.split(":")[1])
 
-            # БРОНЯ
-            own_ids = await check_own_groups(db, callback.from_user.id)
+            # # БРОНЯ
+            # own_ids = await check_own_groups(db, callback.from_user.id)
             
-            if chat_id in own_ids:
-                text = "⚙️ Список адміністраторів чату\n"
-                await callback.message.edit_text(
-                    text, reply_markup=await admin_list(db, callback.bot, chat_id)
-                )
-            else:
-                await callback.answer("❌ Керувати модераторами може виключно власник чату!", show_alert=True)
+            # if chat_id in own_ids:
+            text = "⚙️ Список адміністраторів чату\n"
+            await callback.message.edit_text(
+                text, reply_markup=await admin_list(db, callback.bot, chat_id)
+            )
+            # else:
+            #     await callback.answer("❌ Керувати модераторами може виключно власник чату!", show_alert=True)
     elif result.startswith("remove_moder:"):
         chat_id = int(result.split(":")[1])
         admin_id = result.split(":")[2]
