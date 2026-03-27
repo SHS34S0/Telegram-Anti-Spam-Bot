@@ -76,7 +76,7 @@ class PromtAI:
     """
 
 
-class AmminChangFilters:
+class AdminChangFilters:
     @staticmethod
     def description_buttons(result):
         if result == "stop_channel":

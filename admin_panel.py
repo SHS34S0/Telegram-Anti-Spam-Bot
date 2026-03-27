@@ -346,7 +346,7 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         all_chats = list(set(own_ids + admin_ids))
         if all_chats:
             await callback.message.edit_text(
-                msg.AmminChangFilters.description_buttons(result),
+                msg.AdminChangFilters.description_buttons(result),
                 reply_markup=await on_off_buttons(db, callback.bot, all_chats, result),
             )
 
