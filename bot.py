@@ -170,17 +170,6 @@ async def reaction_handler(
     # ==========================================================
     if await fl.msg_count(db, u_id, c_id):
         return
-    await db.execute(
-        """
-        INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date)
-        VALUES (?, ?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id) 
-                DO
-        UPDATE SET msg_count = msg_count + 1
-        """,
-        (u_id, c_id),
-    )
-    await db.commit()
-
     # Ставить реакції. чи забирає ?
     if not reaction.new_reaction:
         return
@@ -193,14 +182,6 @@ async def reaction_handler(
 
         asyncio.create_task(
             send_timed_msg(bot, c_id, msg.SpamMessage.reaction_spam(user_full_name))
-        )
-        await root.user_info(
-            bot,
-            c_id,
-            u_id,
-            user_full_name,
-            reaction.chat.title,
-            "Reaction Spam фото в базі\n💖🎀💖🎀💖🎀💖🎀💖🎀💖🎀💖🎀💖🎀💖🎀",
         )
         return
 
@@ -488,19 +469,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:800]}",
                 )
 
-            # else:
-            #     if voting_buttons == 5:
-            #         work_m_id = await message.reply(
-            #             "⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇",
-            #             reply_markup=get_vote_keyboard(),
-            #         )
-            #         # записуємо в базу даних ТИМЧАСОВИЙ запис на період голосування. передаємо необхідну інфу
-            #         await db.execute(
-            #             "INSERT OR IGNORE INTO votings (chat_id, message_id, user_id, work_m_id) VALUES (?, ?, ?, ?)",
-            #             (c_id, message.message_id, u_id, work_m_id.message_id),
-            #         )
-            #         await db.commit()
-
         else:
             if message.text and rus_language == 1:
                 if fl.rus_language(message.text):
@@ -531,119 +499,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             )
 
             return
-
-
-##################################
-def get_vote_keyboard():
-    builder = InlineKeyboardBuilder()
-
-    builder.add(
-        InlineKeyboardButton(text="🤖 Бот", callback_data="vote_bot"),
-        InlineKeyboardButton(text="👤 Не бот", callback_data="vote_human"),
-    )
-
-    builder.adjust(2)
-    return builder.as_markup()  # Повертаємо готовий результат
-
-
-@dp.callback_query(F.data.startswith("vote_"))
-async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
-    await callback.answer("Дякуємо!", show_alert=True)
-
-    voter_id = callback.from_user.id
-    m_id = callback.message.message_id
-    vote_result = callback.data
-    c = await db.cursor()
-    # перевірка чи перший раз голосує
-    first_voiting = await fl.voting(db, m_id, voter_id)
-
-    ###########################
-    if vote_result == "vote_bot":
-        if first_voiting:  # голосує вперше файл логу створено
-            await db.execute(
-                "UPDATE votings SET bot = bot + 1 WHERE work_m_id = ?",
-                (m_id,),
-            )
-            await db.commit()
-            # перевірка кількості голосів
-            await c.execute(
-                "SELECT * FROM votings WHERE work_m_id = ?",
-                (m_id,),
-            )
-            ban = await c.fetchone()
-            if not ban:
-                await callback.answer("Голосування завершено.")
-                return
-            #################
-            elif ban[4] >= VOITS:
-                try:
-                    # повідомлення де спам
-                    await fl.clear_voting(db, m_id)
-                    await callback.bot.delete_message(chat_id=ban[0], message_id=ban[1])
-                except Exception as e:
-                    logger.error(f"щось не так при видаленні голосування {e}")
-                await safe_ban(callback.message, ban[2], BAN24)
-                # запит в базу, щоб дістати ім'я спамера
-                await c.execute(
-                    "SELECT name FROM users_global WHERE user_id = ?", (ban[2],)
-                )
-                spammer_data = await c.fetchone()
-                # Якщо раптом імені нема в базі, то ставимо заглушку, щоб код не впав
-                spammer_name = spammer_data[0] if spammer_data else "Спамер"
-                # текст з правильним ід та іменем
-                log_text = f'Користувачі вирішили, що <a href="tg://user?id={ban[2]}">{spammer_name}</a> 🤖 Бот.'
-                # Інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закладаємо туди інфу про спамера
-                await fl.clear_voting(db, m_id)
-                await callback.message.edit_text(
-                    log_text,
-                    reply_markup=get_vote_keyboard(),
-                )
-
-                async def _wait_kill():
-                    await asyncio.sleep(60)  # Чекаємо 60 сек
-                    await safe_delete(callback.message)
-
-                asyncio.create_task(_wait_kill())
-            elif ban[5] >= VOITS:  # людина
-                await fl.clear_voting(db, m_id)
-                await callback.message.delete()
-
-            else:
-                await callback.message.edit_text(
-                    f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} ❌ 🧑 Людина: {ban[5]}",
-                    reply_markup=get_vote_keyboard(),
-                )
-        else:
-            await callback.answer("Ваш голос вже було зараховано", show_alert=True)
-    elif vote_result == "vote_human":
-        if not first_voiting:
-            await callback.answer("Ваш голос вже було зараховано", show_alert=True)
-            return
-        # 1. Додаємо голос за людину
-        await db.execute(
-            "UPDATE votings SET human = human + 1 WHERE work_m_id = ?", (m_id,)
-        )
-        await db.commit()
-
-        # Перевіряємо, скільки вже голосів
-        await c.execute(
-            "SELECT * FROM votings WHERE work_m_id = ?",
-            (m_id,),
-        )
-        ban = await c.fetchone()
-
-        if ban and ban[5] >= VOITS:  # Якщо 3 голоси за людину
-            await fl.clear_voting(db, m_id)
-            await safe_delete(callback.message)
-        elif ban:
-            # Оновлюємо текст, щоб бачити прогрес і в "людських" голосах
-            await callback.message.edit_text(
-                f"⚠️ Чи виглядає це повідомлення підозрілим?\nПроголосуйте нижче 👇\n🤖 Бот: {ban[4]} ❌ 🧑 Людина: {ban[5]}",
-                reply_markup=get_vote_keyboard(),
-            )
-    else:
-        pass
-        # поки що так
 
 
 ####
