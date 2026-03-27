@@ -394,14 +394,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             await db.commit()
             fl.msg_count.cache_invalidate(db, u_id, c_id)
             dc_number = await fl.check_dc_number(bot, u_id)
-            if dc_number == 100:
-                await safe_delete(message)
-                await safe_ban(message, u_id)
-                asyncio.create_task(
-                    send_timed_msg(bot, c_id, msg.SpamMessage.spam_18(user_full_name))
-                )
-                return
-            #######################################################################
             if message.chat.username:
                 # Публічні чати
                 msg_link = f"https://t.me/{message.chat.username}/{message.message_id}"
@@ -409,62 +401,16 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 # Закриті чати та супергрупи
                 clean_chat_id = str(message.chat.id).replace("-100", "", 1)
                 msg_link = f"https://t.me/c/{clean_chat_id}/{message.message_id}"
-            ########################################################################
-            if await fl.check_user_bio(bot, u_id):
-                try:
-                    if dc_number in [1, 5]:
-                        await safe_mute(message, u_id)
-                        asyncio.create_task(
-                            send_timed_msg(
-                                bot, c_id, msg.SpamMessage.spam_18(user_full_name)
-                            )
-                        )
-                        await safe_delete(message)
-                    await root.user_info(
-                        bot,
-                        c_id,
-                        u_id,
-                        user_full_name,
-                        chat_name,
-                        f"Посилання в біо\n⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{msg_link}\n\n{message.text[:800]}",
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Помилка {e} при спроби замутити користувача {message.from_user.first_name} {message.from_user.username} {message.from_user.id}\nГруппа {message.chat.title} {message.chat.id}"
-                    )
-                return
-            avatar = await fl.check_user_avatar(bot, message.from_user.id)
-            if avatar:
-                try:
-                    if dc_number in [1, 5]:
-                        await safe_mute(message, u_id)
-                        asyncio.create_task(
-                            send_timed_msg(
-                                bot, c_id, msg.SpamMessage.spam_18(user_full_name)
-                            )
-                        )
-                        await safe_delete(message)
-
-                    await root.user_info(
-                        bot,
-                        c_id,
-                        u_id,
-                        user_full_name,
-                        chat_name,
-                        f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{msg_link}\n\n{message.text[:800]}",
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Помилка {e} при спроби замутити користувача {message.from_user.first_name} {message.from_user.username} {message.from_user.id}\nГруппа {message.chat.title} {message.chat.id}"
-                    )
-                return
-            # але спам ДС обмежимо
-            if dc_number in [1, 5] and not message.from_user.is_bot:
-                await safe_mute(message, u_id)
+            if dc_number == 100:
                 await safe_delete(message)
+                await safe_ban(message, u_id)
                 asyncio.create_task(
-                    send_timed_msg(bot, c_id, msg.SpamMessage.mute(user_full_name))
+                    send_timed_msg(bot, c_id, msg.SpamMessage.spam_18(user_full_name))
                 )
+                return
+            elif dc_number in [1, 5] and not message.from_user.is_bot:
+                await safe_delete(message)
+                await safe_mute(message, u_id)
                 await root.user_info(
                     bot,
                     c_id,
@@ -474,7 +420,28 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{msg_link}\n\n{message.text[:800]}",
                 )
                 return
-
+            if await fl.check_user_bio(bot, u_id):
+                # тут буде тюнінг перевірки не тільки посилань а і стоп слів щоб поєднати 2 в 1 фічу
+                await root.user_info(
+                    bot,
+                    c_id,
+                    u_id,
+                    user_full_name,
+                    chat_name,
+                    f"Посилання в біо\n⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{msg_link}\n\n{message.text[:800]}",
+                )
+            avatar = await fl.check_user_avatar(bot, message.from_user.id)
+            if avatar:
+                # тепер тут тільки оповіщення для ручної преевірки
+                # варто зробити подвівйну преевірку з інтервалом для тих в кого фото нема
+                await root.user_info(
+                    bot,
+                    c_id,
+                    u_id,
+                    user_full_name,
+                    chat_name,
+                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{msg_link}\n\n{message.text[:800]}",
+                )
             if message.from_user.is_premium and u_id > 7700000000:
                 ################################################################################
                 if message.text:
