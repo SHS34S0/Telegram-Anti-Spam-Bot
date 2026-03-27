@@ -237,14 +237,18 @@ async def check_user_bio(bot, user_id):
             return False  # Біо немає - все ок
         # https://t.me/+
         link_pattern = (
-            r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me\+|telegram\.dog)/\+"
+            r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/\+"
         )
-
+        pattern = r"(сторис|истории|прогноз|100%|кэф|коэф|коэффициент|₽|сторисе|экспресс|бесплатный|прибыль|доход|заработок|канальчік|кохатися)"
+        # priority
+        if re.search(pattern, bio, re.IGNORECASE):
+            return 100
         if re.search(link_pattern, bio):
             return True  # Знайшли сміття
 
-    except Exception:
-        pass  # Якщо не вдалось отримати профіль - не банимо
+    except Exception as e:
+        logger.error(f"Проблема при отриманні біо {user_id}: {e}")
+    # Якщо не вдалось отримати профіль не банимо
 
     return False  # Все чисто
 

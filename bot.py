@@ -20,7 +20,6 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import MessageReactionUpdated
 
-import filters
 import filters as fl
 import root
 from admin_panel import admin_router
@@ -244,8 +243,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
     settings = await fl.get_chat_settings(db, c_id)
-    ############# check alternativ
-    asyncio.create_task(send_timed_msg(bot, c_id, msg.PromtAI.SYSTEM_SPAM_PROMPT))
 
     if settings:
         (
@@ -414,19 +411,39 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     chat_name,
                     f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                 )
-                return
-            if await fl.check_user_bio(bot, u_id):
-                # тут буде тюнінг перевірки не тільки посилань а і стоп слів щоб поєднати 2 в 1 фічу
-                await root.user_info(
-                    bot,
-                    c_id,
-                    u_id,
-                    user_full_name,
-                    chat_name,
-                    f"Посилання в біо\n⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                asyncio.create_task(
+                    send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
                 )
-            avatar = await fl.check_user_avatar(bot, message.from_user.id)
-            if avatar:
+                return
+            bio = await fl.check_user_bio(bot, u_id)
+            if bio:
+                if bio == 100:
+                    await safe_delete(message)
+                    await safe_ban(message, u_id)
+                    asyncio.create_task(
+                        send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
+                    )
+                    await root.user_info(
+                        bot,
+                        c_id,
+                        u_id,
+                        user_full_name,
+                        chat_name,
+                        f"Біо БАН\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                    )
+                    return
+                else:  # тимчасово щоб наповнити базу
+                    chat_info = await bot.get_chat(u_id)
+                    bio = chat_info.bio
+                    await root.user_info(
+                        bot,
+                        c_id,
+                        u_id,
+                        user_full_name,
+                        chat_name,
+                        f"Біо\n{bio}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                    )
+            if await fl.check_user_avatar(bot, message.from_user.id):
                 # тепер тут тільки оповіщення для ручної преевірки
                 # варто зробити подвівйну преевірку з інтервалом для тих в кого фото нема
                 await root.user_info(
@@ -435,7 +452,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                 )
             if message.from_user.is_premium and u_id > 7700000000:
                 ################################################################################
@@ -459,19 +476,19 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         )
                         return
 
-                chat_info = await bot.get_chat(u_id)
-                bio = chat_info.bio
-                if bio:
-                    pattern = r"(?:сторис|истории|прогноз|100%|кэф|₽|сторисе|экспресс|коэф|Бесплатный|бесплатный)"
-
-                    if re.search(pattern, bio):
-                        await safe_delete(message)
-                        await safe_ban(message, u_id)
-                        asyncio.create_task(
-                            send_timed_msg(
-                                bot, c_id, msg.SpamMessage.spam_18(user_full_name)
-                            )
-                        )
+                # chat_info = await bot.get_chat(u_id)
+                # bio = chat_info.bio
+                # if bio:
+                #     pattern = r"(?:сторис|истории|прогноз|100%|кэф|₽|сторисе|экспресс|коэф|Бесплатный|бесплатный)"
+                #
+                #     if re.search(pattern, bio):
+                #         await safe_delete(message)
+                #         await safe_ban(message, u_id)
+                #         asyncio.create_task(
+                #             send_timed_msg(
+                #                 bot, c_id, msg.SpamMessage.spam_18(user_full_name)
+                #             )
+                #         )
                 ###################################################################################
                 await root.user_info(
                     bot,
