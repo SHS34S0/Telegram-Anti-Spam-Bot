@@ -1,5 +1,4 @@
-from aiogram import Router, F
-from aiogram import Bot, Dispatcher, html, F
+from aiogram import html, F, Router
 from aiogram.filters import Command
 import aiosqlite
 import filters as fl
@@ -13,6 +12,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 import messages as msg
+from filters import logger
 
 
 async def on_admin(db, chat_id, admin_id):
@@ -121,7 +121,8 @@ async def on_off_buttons(db, bot, chat_ids, feature):
                 ),
             )
         except (TelegramForbiddenError, TelegramBadRequest) as e:
-            # Видаляемо з бази
+            logger.error(f"Видаляємо з бази канал {e}")
+            # Видаляємо з бази
             c = await db.cursor()
             await c.execute(
                 "DELETE FROM chat_links WHERE chat_id = ?",
@@ -150,7 +151,7 @@ async def add_admin(db, bot, chat_ids):
                 ),
             )
         except (TelegramForbiddenError, TelegramBadRequest) as e:
-            # Видаляемо з бази
+            logger.error(f"Видаляємо з бази канал {e}")
             c = await db.cursor()
             await c.execute(
                 "DELETE FROM chat_links WHERE chat_id = ?",
@@ -195,6 +196,7 @@ async def admin_list(db, bot, chat_id):
                 ),
             )
     except Exception as e:
+        logger.error(f"Видаляємо з бази канал {e}")
         # якщо бот не адмін або його видалили  чистимо базу
         await db.execute("DELETE FROM chat_links WHERE chat_id = ?", (chat_id,))
         await db.commit()
@@ -234,7 +236,7 @@ async def admin_start(message: Message, db):
         admin_help_text = (
             "👮‍♂️ <b>Список груп, де ви є власником:</b>\n\n"
             "Оберіть чат, куди хочете додати адмінів, які зможуть керувати налаштуваннями бота."
-            # "Контрорлюйте кому ви надали право керувати своїми чатами за допомогою команди /my_admins"
+            # "Контролюйте кому ви надали право керувати своїми чатами за допомогою команди /my_admins"
         )
         chat_ids = await check_own_groups(db, message.from_user.id)
         await message.answer(

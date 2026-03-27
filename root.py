@@ -1,16 +1,6 @@
-import asyncio
-import config
-import filters as fl
-from aiogram import Router, F
-from aiogram.types import Message
-from aiogram import Bot
-from aiogram import Router, F
-from aiogram import Bot, Dispatcher, html, F
-from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram import Bot, F, Router
 import aiosqlite
 import filters as fl
-import time
 import io
 import asyncio
 import imagehash
@@ -28,8 +18,8 @@ import config
 async def mass_unban(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-            (ignore_chat_id,),
+                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+                (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -142,7 +132,6 @@ async def root_info(message: Message, bot: Bot, db):
                 "Ручне блокування по ІД",
             )
         if message.text and message.text.lower() == "cache":
-
             await bot.send_message(
                 chat_id=str(config.root),
                 text=f"📊 КЕШ каналів: {fl.get_chat_settings.cache_info()}\n📊 КЕШ учасників: {fl.msg_count.cache_info()}\n📊 КЕШ DC: {fl.check_dc_number.cache_info()}\n📊 КЕШ Біо: {fl.check_user_bio.cache_info()}\n📊 КЕШ Фото: {fl.check_user_avatar.cache_info()}",
@@ -155,19 +144,18 @@ async def root_info(message: Message, bot: Bot, db):
 @root_router.callback_query(
     F.data.startswith(
         (
-            "mass_blocking:",
-            "unblock:",
-            "add_photo:",
+                "mass_blocking:",
+                "unblock:",
+                "add_photo:",
         )
     )
 )
 async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connection):
-
     list_data = callback.data
     value = list_data.split(":")[1]
     result = list_data.split(":")[0]
     if result.startswith("mass_blocking"):
-        await callback.message.answer(f"Починаю массове блокування")
+        await callback.message.answer(f"Починаю масове блокування")
         await fl.mass_blocking(bot, db, int(value), 111)
     elif result.startswith("unblock"):
         await callback.message.answer(f"Відправляю запит зняття обмежень")
@@ -185,9 +173,9 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
         try:
             new_hash_obj = imagehash.hex_to_hash(hash_value)
             fl.PHOTO_HASH[new_hash_obj] = True
-            # скидаемо кеш в цій сессії для користувача
+            # скидаємо кеш в цій сесії для користувача
             fl.check_dc_number.cache_invalidate(bot, user_to_clear)
-            # спливаюче вікно
+            # вікно
             await callback.answer(
                 "✅ Фото додано в базу\nКеш юзера очищено!", show_alert=True
             )

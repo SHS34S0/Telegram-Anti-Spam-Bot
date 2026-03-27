@@ -32,15 +32,15 @@ async def load_hashes(db: aiosqlite.Connection):
         for row in rows:
             hash_text = row[0]
             PHOTO_HASH[imagehash.hex_to_hash(hash_text)] = True
-    print(f"✅ Завантажено {len(PHOTO_HASH)} хешів у словник фільтрів.")
+    print(f"✅ Завантажено {len(PHOTO_HASH)} фото у словник фільтрів.")
 
 
 ##########################################################################
 # ініціалізація детектора
 try:
     _nude_detector = NudeDetector()
-except Exception as e:
-    print(f"⚠️ Помилка запуску NudeNet: {e}")
+except Exception as er:
+    logger.error(f"Помилка запуску {er}")
     _nude_detector = None
 _nude_semaphore = asyncio.Semaphore(2)  # кількість потоків
 # 0.60
@@ -55,7 +55,6 @@ BAN_LIST = {
 }
 
 MUTE_LIST = {
-    # замануха
     "FEMALE_BREAST_COVERED",
     "BUTTOCKS_COVERED",
     "FEMALE_GENITALIA_COVERED",
@@ -78,10 +77,10 @@ async def check_user_avatar(bot, user_id: int):
         if not photos.total_count:
             return False
 
-        # останне фото
+        # останнє фото
         photo_file_id = photos.photos[0][-1].file_id
 
-        # скакачати файл
+        # скачати файл
         file = await bot.get_file(photo_file_id)
         await bot.download_file(file.file_path, file_path)
 
@@ -103,7 +102,7 @@ async def check_user_avatar(bot, user_id: int):
                 return 50  # МУТ
 
     except Exception as e:
-        print(f"Помилка перевірки аватара {user_id}: {e}")
+        logger.error(f"Помилка перевірки аватара {user_id}: {e}")
 
     finally:
         # видалення файлу
@@ -127,7 +126,7 @@ async def register_or_update_passport(db, user_id, full_name, username):
 
 
 @alru_cache(maxsize=1000)
-async def get_chat_settings(db, c_id):  # преевірка хто є канал чату (повертаємо id)
+async def get_chat_settings(db, c_id):  # перевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
     await c.execute(
         "SELECT owner_id, voting_buttons, rus_language, stop_word, stop_channel, stop_links, card_number, emoji_checker, reaction_spam FROM chat_links WHERE chat_id = ?",
@@ -178,7 +177,7 @@ async def clear_voting(db, m_id):
 
 
 def emoji_checker(text):
-    ALLOWED = set(
+    allowed = set(
         "абвгґдеєжзиіїйклмнопрстуфхцчшщьюяАБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?,. "
     )
     try:
@@ -189,12 +188,12 @@ def emoji_checker(text):
 
         clean_count = 0
         for char in text:
-            if char in ALLOWED:
+            if char in allowed:
                 clean_count += 1
 
         ratio = (clean_count * 100) / total_len
 
-        # Якщо повідомлення короткедо 100 символів
+        # Якщо повідомлення коротке до 100 символів
         if total_len < 100:
             if ratio >= 60:  # Дозволяємо більше смайлів
                 return 100
@@ -207,7 +206,7 @@ def emoji_checker(text):
                 return 100
             else:
                 return ratio
-    except TypeError:  # все ок це не текст а гівка чи ще щось
+    except TypeError:  # все ок це не текст, а гіф чи ще щось
         return 100
 
 
@@ -253,7 +252,7 @@ async def check_user_bio(bot, user_id):
     return False  # Все чисто
 
 
-### ймовірно це тепер чисто рутовська фіча і треба прибрати звідси ?
+### ймовірно це тепер чисто рут фіча і треба прибрати звідси ?
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
@@ -321,10 +320,12 @@ def rus_language(text):
     have = words & set(text.lower().split())
     if have:
         return True
+    else:
+        return False
 
 
 def check_card(text):
-    # все що не цифра замінити на пустоту
+    # все що не цифра, замінити на пустоту
     clean_text = re.sub(r"\D", "", text)
     possible_cards = re.findall(r"\d{16}", clean_text)
     if not possible_cards:
@@ -332,6 +333,7 @@ def check_card(text):
     for number in possible_cards:
         if luhn_check(number):
             return True
+    return False
 
 
 def luhn_check(card_number):
@@ -403,13 +405,12 @@ async def check_dc_number(bot, u_id):
 
     if photos.total_count > 0:
         photo = photos.photos[0][-1]
-        ##### тут треба звіряти хеш іншою функціею.
+        ##### Тут треба звіряти хеш іншою функцією.
         if await check_hash(bot, photo):
             return 100
         suffix = photo.file_unique_id[-3:]
-        if DC_DICT.get(suffix):
-            return DC_DICT.get(suffix)
-        return photo.file_unique_id
+        return DC_DICT.get(suffix) or photo.file_unique_id
+    return None
 
 
 def is_good_mention(entities, message):
@@ -418,6 +419,7 @@ def is_good_mention(entities, message):
             mention_text = message[e.offset: e.offset + e.length]
             if mention_text.lower() == "@admin":
                 return True
+    return False
 
 
 async def send_remote_log(message, logger_token, admin_id, text):
@@ -481,7 +483,7 @@ async def is_spam(message: str) -> bool:
 
             return "SPAM" in answer
         except Exception as e:
-            logger.error(f"Помилка при спрорбі аналізувати повідомлення AI {e}")
+            logger.error(f"Помилка при спробі аналізувати повідомлення AI {e}")
             return False
 
 
