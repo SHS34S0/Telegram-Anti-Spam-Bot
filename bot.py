@@ -1,18 +1,14 @@
 import asyncio
-import logging
 import sys
 import time
-import re
-from os import getenv
-from datetime import datetime, timedelta
-
 import aiosqlite
 import config
+import re
 
-from aiogram import Bot, Dispatcher, html, F
+from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, ChatMemberUpdatedFilter, IS_NOT_MEMBER, MEMBER
+from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, MEMBER
 from aiogram.types import (
     Message,
     ChatMemberUpdated,
@@ -20,16 +16,16 @@ from aiogram.types import (
     InlineKeyboardButton,
     ChatPermissions,
 )
+
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import MessageReactionUpdated
 import filters as fl
 import root
 from admin_panel import admin_router
-from aiogram import html
 import logging
+import messages as msg
 
-# назва файлу створюемо власний мікрофон
+# назва файлу створимо власний мікрофон
 logger = logging.getLogger(__name__)
 
 logging.basicConfig(
@@ -46,7 +42,7 @@ VOITS = 3
 BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
 
-# варто прееконатись чи то ще треба
+# варто переконатись чи то ще треба
 GOOD_STATUSES = {"member", "administrator", "creator"}
 
 
@@ -55,7 +51,7 @@ async def safe_delete(message):
     try:
         await message.delete()
         logger.warning(
-            f"Видалено від {message.from_user.first_name} {message.from_user.username} {message.from_user.id}\nГруппа {message.chat.title} {message.chat.id}\nПовідомлення: {fl.massage_type_check(message)} {message.text}"
+            f"Видалено від {message.from_user.first_name} {message.from_user.username} {message.from_user.id}\nГрупа {message.chat.title} {message.chat.id}\nПовідомлення: {fl.massage_type_check(message)} {message.text}"
         )
 
         if not message.from_user.is_bot:
@@ -67,7 +63,7 @@ async def safe_delete(message):
             )
     except Exception as e:
         logger.error(
-            f"помика {e} при видаленні повідомлення від {message.from_user.first_name} {message.from_user.username} {message.from_user.id}"
+            f"помилка {e} при видаленні повідомлення від {message.from_user.first_name} {message.from_user.username} {message.from_user.id}"
         )
         await fl.send_remote_log(
             message,
@@ -144,12 +140,13 @@ dp = Dispatcher()
 dp.include_router(admin_router)
 dp.include_router(root.root_router)
 
+
 ##########################################################################################
 
 
 @dp.message_reaction()
 async def reaction_handler(
-    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+        reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
 ):
     user = reaction.user
     if not user:
@@ -158,7 +155,7 @@ async def reaction_handler(
     u_id = user.id
     c_id = reaction.chat.id
     user_full_name = reaction.user.full_name
-    #  КОСТИЛЬ видалення повідомлення через 🤡
+    #  МИЛИЦЯ видалення повідомлення через 🤡
     if str(u_id) == str(config.root):
         for react in reaction.new_reaction:
             if getattr(react, "emoji", None) == "🤡":
@@ -176,11 +173,11 @@ async def reaction_handler(
         return
     await db.execute(
         """
-                INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date) 
-                VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id, channel_id) 
-                DO UPDATE SET msg_count = msg_count + 1
-                """,
+        INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date)
+        VALUES (?, ?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id) 
+                DO
+        UPDATE SET msg_count = msg_count + 1
+        """,
         (u_id, c_id),
     )
     await db.commit()
@@ -188,11 +185,6 @@ async def reaction_handler(
     # ставить реакці. чи забирає ?
     if not reaction.new_reaction:
         return
-    reason_text = (
-        f"🛡 Користувача <b>{user_full_name}</b> заблоковано (Бан).\n"
-        f"⛔️ <b>Причина:</b> Reaction Spam.\n"
-        f"📉 <i>З метою привернення уваги до профілю (реклама/18+).</i>"
-    )
     dc_number = await fl.check_dc_number(bot, u_id)
     if dc_number == 100:
         await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
@@ -200,7 +192,9 @@ async def reaction_handler(
             f"Заблоковано {user_full_name} {u_id}\nГруппа {reaction.chat.title} {c_id} \nПричина: Reaction Spam"
         )
 
-        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+        asyncio.create_task(
+            send_timed_msg(bot, c_id, msg.SpamMessage.reaction_spam(user_full_name))
+        )
         await root.user_info(
             bot,
             c_id,
@@ -223,9 +217,9 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
     await fl.register_or_update_passport(db, user_id, full_name, username)
     await db.execute(
         """
-        INSERT INTO chat_stats (user_id, channel_id, join_date) 
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET join_date = CURRENT_TIMESTAMP
+        INSERT INTO chat_stats (user_id, channel_id, join_date)
+        VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id) DO
+        UPDATE SET join_date = CURRENT_TIMESTAMP
         """,
         (user_id, c_id),
     )
@@ -239,7 +233,6 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 @dp.message(F.chat.type.in_({"group", "supergroup"}))
 @dp.edited_message(F.chat.type.in_({"group", "supergroup"}))
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
-
     if message.new_chat_members or message.left_chat_member:
         return
     ####################
@@ -249,18 +242,8 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
     settings = await fl.get_chat_settings(db, c_id)
-    reason_text_ban_18 = (
-        f"‼️ Користувач {user_full_name} заблоковано.\nПричина: ⛔️ Спам 18+."
-    )
-    reason_mute = (
-        f"🤐 Користувач <b>{user_full_name}</b> тимчасово переведений у режим читання (Мут).\n"
-        f"⚠️ <b>Причина:</b> Підозра на недопустимий контент (18+).\n"
-        f"⏳ <i>Обмеження буде знято після ручної перевірки адміністратором.</i>"
-    )
-    reas_text = (
-        f"‼️ Користувач {user_full_name} заблоковано.\nПричина: 🚫 Рекламний спам."
-    )
-    emoji_text = f"‼️ {user_full_name}, повідомлення видалено.\nЗабагато емодзі. Так часто маскують рекламу, тому заради безпеки чату я його прибрав."
+    ############# check alternativ
+    asyncio.create_task(send_timed_msg(bot, c_id, msg.PromtAI.SYSTEM_SPAM_PROMPT))
 
     if settings:
         (
@@ -274,13 +257,12 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             emoji_checker,
             reaction_spam,
         ) = settings
-
         if message.sender_chat and stop_channel == 1:
             if message.sender_chat.id == message.chat.id:
                 return  # це адмін
             elif message.is_automatic_forward:  # репост з каналу який привязаний
                 return
-            # якщо код тут то це спамер або хтось бажае бути анонімним
+            # якщо код тут, то це спамер або хтось бажае бути анонімним
             await safe_delete(message)
             return
         ## Перевірк на шлюхосимволи
@@ -295,10 +277,11 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 chat_name,
                 f"Шлюхосимвол\n\n{message.text[:800]}",
             )
-            asyncio.create_task(send_timed_msg(bot, c_id, reas_text))
+            asyncio.create_task(
+                send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
+            )
             return
         if message.text and card_number == 1 and fl.check_card(message.text):
-            reason_text = f'⚠️ <a href="tg://user?id={u_id}">{user_full_name}</a> ваше повідомлення видалено.\nПричина: Номер картки без узгодження з адмінами.'
             try:  # Якщо було спрацювання
                 member_chat = await bot.get_chat_member(
                     chat_id=c_id, user_id=message.from_user.id
@@ -307,11 +290,23 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     pass  # все ок адмінам можна
                 else:
                     await safe_delete(message)
-                    asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                    asyncio.create_task(
+                        send_timed_msg(
+                            bot,
+                            c_id,
+                            msg.SpamMessage.stop_card_number(u_id, user_full_name),
+                        )
+                    )
                     return  # Чат чистий, далі не йдемо
             except Exception:
                 await safe_delete(message)
-                asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                asyncio.create_task(
+                    send_timed_msg(
+                        bot,
+                        c_id,
+                        msg.SpamMessage.stop_card_number(u_id, user_full_name),
+                    )
+                )
                 return  # Чат чистий, далі не йдемо
         if message.text and emoji_checker == 1:
             kef = fl.emoji_checker(message.text)
@@ -327,7 +322,11 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     chat_name,
                     f"emoji checker\n\n{message.text[:800]}",
                 )
-                asyncio.create_task(send_timed_msg(bot, c_id, emoji_text))
+                asyncio.create_task(
+                    send_timed_msg(
+                        bot, c_id, msg.SpamMessage.emoji_spam(user_full_name)
+                    )
+                )
                 return
             else:
                 await safe_delete(message)
@@ -341,27 +340,41 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 )
                 # Мут
                 await safe_mute(message, u_id)
-                asyncio.create_task(send_timed_msg(bot, c_id, emoji_text))
+                asyncio.create_task(
+                    send_timed_msg(
+                        bot, c_id, msg.SpamMessage.emoji_spam(user_full_name)
+                    )
+                )
                 return
         if stop_links == 1:
             bad_types = {"mention", "url", "text_link"}
             if message.entities and any(e.type in bad_types for e in message.entities):
-                reason_text = f'⚠️ <a href="tg://user?id={u_id}">{user_full_name}</a> посилання в цьому чаті заборонені.'
                 try:  # Якщо було спрацювання
                     member_chat = await bot.get_chat_member(
                         chat_id=c_id, user_id=message.from_user.id
                     )
                     if member_chat.status in ADMIN_STATUSES:
+                        print("Адміністратор")
                         pass  # все ок адмінам можна
-                    if fl.is_good_mention(message.entities, message.text):
+                    elif fl.is_good_mention(message.entities, message.text):
                         pass
                     else:
                         await safe_delete(message)
-                        asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                        asyncio.create_task(
+                            send_timed_msg(
+                                bot,
+                                c_id,
+                                msg.SpamMessage.stop_links(u_id, user_full_name),
+                            )
+                        )
                         return  # Чат чистий, далі не йдемо
                 except Exception:
                     await safe_delete(message)
-                    asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                    asyncio.create_task(
+                        send_timed_msg(
+                            bot, c_id, msg.SpamMessage.stop_links(u_id, user_full_name)
+                        )
+                    )
                     return  # Чат чистий, далі не йдемо
 
         ###################
@@ -371,11 +384,11 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
         if not await fl.msg_count(db, u_id, c_id):
             await db.execute(
                 """
-                        INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date) 
-                        VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-                        ON CONFLICT(user_id, channel_id) 
-                        DO UPDATE SET msg_count = msg_count + 1
-                        """,
+                INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date)
+                VALUES (?, ?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id) 
+                        DO
+                UPDATE SET msg_count = msg_count + 1
+                """,
                 (u_id, c_id),
             )
             await db.commit()
@@ -384,7 +397,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             if dc_number == 100:
                 await safe_delete(message)
                 await safe_ban(message, u_id)
-                asyncio.create_task(send_timed_msg(bot, c_id, reason_text_ban_18))
+                asyncio.create_task(
+                    send_timed_msg(bot, c_id, msg.SpamMessage.spam_18(user_full_name))
+                )
                 return
             #######################################################################
             if message.chat.username:
@@ -400,7 +415,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     if dc_number in [1, 5]:
                         await safe_mute(message, u_id)
                         asyncio.create_task(
-                            send_timed_msg(bot, c_id, reason_text_ban_18)
+                            send_timed_msg(
+                                bot, c_id, msg.SpamMessage.spam_18(user_full_name)
+                            )
                         )
                         await safe_delete(message)
                     await root.user_info(
@@ -422,7 +439,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     if dc_number in [1, 5]:
                         await safe_mute(message, u_id)
                         asyncio.create_task(
-                            send_timed_msg(bot, c_id, reason_text_ban_18)
+                            send_timed_msg(
+                                bot, c_id, msg.SpamMessage.spam_18(user_full_name)
+                            )
                         )
                         await safe_delete(message)
 
@@ -443,7 +462,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             if dc_number in [1, 5] and not message.from_user.is_bot:
                 await safe_mute(message, u_id)
                 await safe_delete(message)
-                asyncio.create_task(send_timed_msg(bot, c_id, reason_mute))
+                asyncio.create_task(
+                    send_timed_msg(bot, c_id, msg.SpamMessage.mute(user_full_name))
+                )
                 await root.user_info(
                     bot,
                     c_id,
@@ -455,6 +476,41 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 return
 
             if message.from_user.is_premium and u_id > 7700000000:
+                ################################################################################
+                if message.text:
+                    if await fl.is_spam(message.text):
+                        # винести функціею показала гуд
+                        await safe_ban(message, u_id)
+                        await safe_delete(message)
+                        asyncio.create_task(
+                            send_timed_msg(
+                                bot, c_id, msg.SpamMessage.spam(user_full_name)
+                            )
+                        )
+                        await root.user_info(
+                            bot,
+                            c_id,
+                            u_id,
+                            user_full_name,
+                            chat_name,
+                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{msg_link}\n\n{(message.text or 'Медіа')[:800]}",
+                        )
+                        return
+
+                chat_info = await bot.get_chat(u_id)
+                bio = chat_info.bio
+                if bio:
+                    pattern = r"(?:сторис|истории|прогноз|100%|кэф|₽|сторисе|экспресс|коэф|Бесплатный|бесплатный)"
+
+                    if re.search(pattern, bio):
+                        await safe_delete(message)
+                        await safe_ban(message, u_id)
+                        asyncio.create_task(
+                            send_timed_msg(
+                                bot, c_id, msg.SpamMessage.spam_18(user_full_name)
+                            )
+                        )
+                ###################################################################################
                 await root.user_info(
                     bot,
                     c_id,
@@ -479,11 +535,13 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 
         else:
             if message.text and rus_language == 1:
-
-                reason_text = f"🛡 {user_full_name}, я видалив ваше повідомлення, оскільки в цьому чаті не пишуть російською. "
                 if fl.rus_language(message.text):
                     await safe_delete(message)
-                    asyncio.create_task(send_timed_msg(bot, c_id, reason_text))
+                    asyncio.create_task(
+                        send_timed_msg(
+                            bot, c_id, msg.SpamMessage.russian_language(user_full_name)
+                        )
+                    )
 
             # тут будуть функції які адмін може вмикати вимикати
             # stop words
@@ -522,7 +580,6 @@ def get_vote_keyboard():
 
 @dp.callback_query(F.data.startswith("vote_"))
 async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
-    # треба налагодити бо щоб не натиснув висвічуеться тільки це
     # якщо прибираю не працюе і кнопки завичаю. ТРЕБА ДОСЛІДИТИ
     await callback.answer("Дякуємо!", show_alert=True)
 
@@ -559,16 +616,16 @@ async def handle_voting(callback: CallbackQuery, db: aiosqlite.Connection):
                 except Exception:
                     pass
                 await safe_ban(callback.message, ban[2], BAN24)
-                # запит в базу, щоб дістати імя спамера
+                # запит в базу, щоб дістати ім'я спамера
                 await c.execute(
                     "SELECT name FROM users_global WHERE user_id = ?", (ban[2],)
                 )
                 spammer_data = await c.fetchone()
-                # Якщо раптом імені нема в базі то ставимо заглушку, щоб код не впав
+                # Якщо раптом імені нема в базі, то ставимо заглушку, щоб код не впав
                 spammer_name = spammer_data[0] if spammer_data else "Спамер"
                 # текст з правильним ід та іменем
                 log_text = f'Користувачі вирішили, що <a href="tg://user?id={ban[2]}">{spammer_name}</a> 🤖 Бот.'
-                # інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закадаємо туди інфу про спамера
+                # Інформативне повідомлення для історії змін в чаті буде відображатись остання редакція. закадаємо туди інфу про спамера
                 await fl.clear_voting(db, m_id)
                 await callback.message.edit_text(
                     log_text,

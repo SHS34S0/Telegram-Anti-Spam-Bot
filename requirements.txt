@@ -5,3 +5,4 @@ async-lru
 pytest
 ImageHash
 Pillow
+httpx

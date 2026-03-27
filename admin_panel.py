@@ -1,7 +1,6 @@
 from aiogram import Router, F
 from aiogram import Bot, Dispatcher, html, F
 from aiogram.filters import Command
-from aiogram.types import Message
 import aiosqlite
 import filters as fl
 
@@ -13,12 +12,13 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+import messages as msg
 
 
 async def on_admin(db, chat_id, admin_id):
     await db.execute(
         """
-        INSERT INTO admins (chat_id, admin_id, status) 
+        INSERT INTO admins (chat_id, admin_id, status)
         VALUES (?, ?, 1)
         ON CONFLICT(chat_id, admin_id) DO UPDATE SET status = 1
         """,
@@ -30,7 +30,7 @@ async def on_admin(db, chat_id, admin_id):
 async def off_admin(db, chat_id, admin_id):
     await db.execute(
         """
-        INSERT INTO admins (chat_id, admin_id, status) 
+        INSERT INTO admins (chat_id, admin_id, status)
         VALUES (?, ?, 0)
         ON CONFLICT(chat_id, admin_id) DO UPDATE SET status = 0
         """,
@@ -223,7 +223,6 @@ admin_router.message.filter(F.chat.type == "private")
     )
 )
 async def admin_start(message: Message, db):
-
     if message.text == "/my_settings":
         text_settint = (
             "⚙️ Параметри захисту\n\n"
@@ -244,8 +243,8 @@ async def admin_start(message: Message, db):
 
     else:
         text = (
-            f"👋 <b>Вітаю, {html.bold(message.from_user.full_name)}!</b>\n"
-            + config.TEXT
+                f"👋 <b>Вітаю, {html.bold(message.from_user.full_name)}!</b>\n"
+                + msg.NormalMessage.text_about
         )
         await message.answer(text)
 
@@ -253,30 +252,32 @@ async def admin_start(message: Message, db):
 @admin_router.callback_query(
     F.data.startswith(
         (
-            "on:",
-            "off:",
-            "stop_channel",
-            "stop_links",
-            "card_number",
-            "rus_language",
-            "stop_word",
-            "emoji_checker",
-            "reaction_spam",
-            "my_settings",
-            "name_group:",
-            "add_moder",
-            "remove_moder:",
+                "on:",
+                "off:",
+                "stop_channel",
+                "stop_links",
+                "card_number",
+                "rus_language",
+                "stop_word",
+                "emoji_checker",
+                "reaction_spam",
+                "my_settings",
+                "name_group:",
+                "add_moder",
+                "remove_moder:",
         )
     )
 )
 async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
-
     result = callback.data
     if result.startswith("on:"):
         chat_id = int(result.split(":")[1])
         result = result.split(":")[2]
         member = await callback.bot.get_chat_member(chat_id, callback.from_user.id)
-        if member.status in ["administrator", "creator"] or callback.from_user.id == config.root:
+        if (
+                member.status in ["administrator", "creator"]
+                or callback.from_user.id == config.root
+        ):
             await edit_setting(db, chat_id, result, 1)
             await callback.message.edit_text(
                 f"status ввімкнено для чату {chat_id}", reply_markup=settings()
@@ -288,7 +289,10 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         chat_id = int(result.split(":")[1])
         result = result.split(":")[2]
         member = await callback.bot.get_chat_member(chat_id, callback.from_user.id)
-        if member.status in ["administrator", "creator"] or callback.from_user.id == config.root:
+        if (
+                member.status in ["administrator", "creator"]
+                or callback.from_user.id == config.root
+        ):
             await edit_setting(db, chat_id, result, 0)
             await callback.message.edit_text(
                 f"status вимкнено для чату {chat_id}", reply_markup=settings()
@@ -302,19 +306,19 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
             "Використовуйте меню нижче для ручного коригування модулів, якщо цього вимагають правила вашого чату."
         )
         await callback.message.edit_text(text_settint, reply_markup=settings())
-    elif result.startswith("name_group:"):  
-            chat_id = int(result.split(":")[1])
+    elif result.startswith("name_group:"):
+        chat_id = int(result.split(":")[1])
 
-            # # БРОНЯ
-            # own_ids = await check_own_groups(db, callback.from_user.id)
-            
-            # if chat_id in own_ids:
-            text = "⚙️ Список адміністраторів чату\n"
-            await callback.message.edit_text(
-                text, reply_markup=await admin_list(db, callback.bot, chat_id)
-            )
-            # else:
-            #     await callback.answer("❌ Керувати модераторами може виключно власник чату!", show_alert=True)
+        # # БРОНЯ
+        # own_ids = await check_own_groups(db, callback.from_user.id)
+
+        # if chat_id in own_ids:
+        text = "⚙️ Список адміністраторів чату\n"
+        await callback.message.edit_text(
+            text, reply_markup=await admin_list(db, callback.bot, chat_id)
+        )
+        # else:
+        #     await callback.answer("❌ Керувати модераторами може виключно власник чату!", show_alert=True)
     elif result.startswith("remove_moder:"):
         chat_id = int(result.split(":")[1])
         admin_id = result.split(":")[2]
@@ -335,13 +339,12 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         "emoji_checker",
         "reaction_spam",
     ]:
-        text = config.description_buttons(result)
         own_ids = await check_own_groups(db, callback.from_user.id)
         admin_ids = await check_admin_groups(db, callback.from_user.id)
         all_chats = list(set(own_ids + admin_ids))
         if all_chats:
             await callback.message.edit_text(
-                text,
+                msg.AmminChangFilters.description_buttons(result),
                 reply_markup=await on_off_buttons(db, callback.bot, all_chats, result),
             )
 

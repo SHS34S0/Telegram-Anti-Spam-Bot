@@ -1,9 +1,5 @@
-import aiosqlite
 import re
-import os
-from nudenet import NudeDetector
 import asyncio
-import time
 import os
 from nudenet import NudeDetector
 from async_lru import alru_cache
@@ -14,17 +10,11 @@ from PIL import Image
 import aiosqlite
 import aiohttp
 import logging
+import httpx
+from config import HF_TOKEN, MODEL, API_URL, TIMEOUT
+import messages as msg
 
 logger = logging.getLogger(__name__)
-
-logging.basicConfig(
-    handlers=[
-        logging.FileHandler("my_log.log", encoding="utf-8"),  # Пише у файл
-        logging.StreamHandler(),  # Виводить у термінал
-    ],
-    level=logging.WARNING,
-    format="[%(asctime)s] [%(name)s] %(levelname)s (рядок %(lineno)d): %(message)s",
-)
 #######################################################
 with open("dc.json", "r", encoding="utf-8") as f:
     DC_DICT = json.load(f)
@@ -263,8 +253,8 @@ async def check_user_bio(bot, user_id):
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-            (ignore_chat_id,),
+                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+                (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -287,7 +277,6 @@ async def mass_blocking(bot, db, user_id, ignore_chat_id):
 
 
 def rus_language(text):
-
     for i in text.lower():
         if i in ["ы", "э", "ъ", "ё"]:
             return True
@@ -422,7 +411,7 @@ async def check_dc_number(bot, u_id):
 def is_good_mention(entities, message):
     for e in entities:
         if e.type == "mention":
-            mention_text = message[e.offset : e.offset + e.length]
+            mention_text = message[e.offset: e.offset + e.length]
             if mention_text.lower() == "@admin":
                 return True
 
@@ -461,3 +450,32 @@ async def send_remote_log(message, logger_token, admin_id, text):
                 return await response.json()
     except Exception as e:
         print(f"Помилка відправки через зовнішнього бота: {e}")
+
+
+async def is_spam(message: str) -> bool:
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": msg.PromtAI.SYSTEM_SPAM_PROMPT},
+            {"role": "user", "content": message},
+        ],
+        "max_tokens": 5,
+        "temperature": 0.1,
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                API_URL, headers=headers, json=body, timeout=TIMEOUT
+            )
+            response.raise_for_status()
+            data = response.json()
+            answer = data["choices"][0]["message"]["content"].strip().upper()
+
+            return "SPAM" in answer
+        except Exception as e:
+            logger.error(f"Помилка при спрорбі аналізувати повідомлення AI {e}")
+            return False
