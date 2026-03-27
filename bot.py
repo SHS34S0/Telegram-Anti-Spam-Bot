@@ -232,6 +232,9 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 @dp.message(F.chat.type.in_({"group", "supergroup"}))
 @dp.edited_message(F.chat.type.in_({"group", "supergroup"}))
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
+    if message.from_user and message.from_user.id == 777000:
+        print("finish")
+        return
     if message.new_chat_members or message.left_chat_member:
         return
     ####################
@@ -254,6 +257,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             emoji_checker,
             reaction_spam,
         ) = settings
+
         if message.sender_chat and stop_channel == 1:
             if message.sender_chat.id == message.chat.id:
                 return  # це адмін
