@@ -19,6 +19,8 @@ from aiogram.types import (
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import MessageReactionUpdated
+
+import filters
 import filters as fl
 import root
 from admin_panel import admin_router
@@ -394,13 +396,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             await db.commit()
             fl.msg_count.cache_invalidate(db, u_id, c_id)
             dc_number = await fl.check_dc_number(bot, u_id)
-            if message.chat.username:
-                # Публічні чати
-                msg_link = f"https://t.me/{message.chat.username}/{message.message_id}"
-            else:
-                # Закриті чати та супергрупи
-                clean_chat_id = str(message.chat.id).replace("-100", "", 1)
-                msg_link = f"https://t.me/c/{clean_chat_id}/{message.message_id}"
             if dc_number == 100:
                 await safe_delete(message)
                 await safe_ban(message, u_id)
@@ -417,7 +412,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{msg_link}\n\n{message.text[:800]}",
+                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                 )
                 return
             if await fl.check_user_bio(bot, u_id):
@@ -428,7 +423,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"Посилання в біо\n⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{msg_link}\n\n{message.text[:800]}",
+                    f"Посилання в біо\n⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                 )
             avatar = await fl.check_user_avatar(bot, message.from_user.id)
             if avatar:
@@ -440,7 +435,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{msg_link}\n\n{message.text[:800]}",
+                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\nDC {dc_number}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                 )
             if message.from_user.is_premium and u_id > 7700000000:
                 ################################################################################
@@ -460,7 +455,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                             u_id,
                             user_full_name,
                             chat_name,
-                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{msg_link}\n\n{(message.text or 'Медіа')[:800]}",
+                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:800]}",
                         )
                         return
 
@@ -484,7 +479,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{msg_link}\n\n{(message.text or 'Медіа')[:800]}",
+                    f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:800]}",
                 )
 
             # else:

@@ -479,3 +479,13 @@ async def is_spam(message: str) -> bool:
         except Exception as e:
             logger.error(f"Помилка при спрорбі аналізувати повідомлення AI {e}")
             return False
+
+
+def generate_message_link(message):
+    if message.chat.username:
+        # Публічні чати
+        return f"https://t.me/{message.chat.username}/{message.message_id}"
+    else:
+        # Закриті чати та супергрупи
+        clean_chat_id = str(message.chat.id).replace("-100", "", 1)
+        return f"https://t.me/c/{clean_chat_id}/{message.message_id}"
