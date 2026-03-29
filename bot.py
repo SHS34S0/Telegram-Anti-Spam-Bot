@@ -215,6 +215,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
     settings = await fl.get_chat_settings(db, c_id)
+    # active chats
+    if c_id not in root.chats_info:
+        root.chats_info[c_id] = chat_name
 
     if settings:
         (
@@ -427,7 +430,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         u_id,
                         user_full_name,
                         chat_name,
-                        f"Біо\n\n{bio}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                        f"Біо\n\n{bio}\n\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                     )
             if await fl.check_user_avatar(bot, message.from_user.id):
                 # тепер тут тільки оповіщення для ручної перевірки

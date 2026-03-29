@@ -14,6 +14,8 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 
+chats_info = {}
+
 
 async def mass_unban(bot, db, user_id, ignore_chat_id):
     try:
@@ -139,6 +141,24 @@ async def root_info(message: Message, bot: Bot, db):
             await bot.send_message(
                 chat_id=str(config.root),
                 text=f"📊 КЕШ каналів: {fl.get_chat_settings.cache_info()}\n📊 КЕШ учасників: {fl.msg_count.cache_info()}\n📊 КЕШ DC: {fl.check_dc_number.cache_info()}\n📊 КЕШ Біо: {fl.check_user_bio.cache_info()}\n📊 КЕШ Фото: {fl.check_user_avatar.cache_info()}",
+                parse_mode="HTML",
+            )
+        if message.text and message.text.lower() == "chats":
+            chats_text = ""
+            for index, chat in enumerate(chats_info.items(), start=1):
+                c_id = chat[0]
+                clean_c_id = (
+                    str(c_id).replace("-100", "", 1)
+                    if str(c_id).startswith("-100")
+                    else str(c_id)
+                )
+                chat_name = chat[1]
+                chats_text += (
+                    f'{index} <a href="https://t.me/c/{clean_c_id}">{chat_name}</a>\n'
+                )
+            await bot.send_message(
+                chat_id=str(config.root),
+                text=f"📊 Список активних чатів з моменту перезавантаження:\n\n{chats_text}",
                 parse_mode="HTML",
             )
 
