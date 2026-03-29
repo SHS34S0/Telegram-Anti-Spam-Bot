@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 import time
 import aiosqlite
@@ -136,7 +137,7 @@ dp.include_router(root.root_router)
 
 @dp.message_reaction()
 async def reaction_handler(
-        reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
 ):
     user = reaction.user
     if not user:
@@ -508,8 +509,13 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 ####
 async def main() -> None:
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-
-    async with aiosqlite.connect("anti_spam.db") as db:
+    file_exists = os.path.exists("db/anti_spam.db")
+    async with aiosqlite.connect("db/anti_spam.db") as db:
+        if not file_exists:
+            with open("db/schema.sql") as s:
+                schema = s.read()
+                await db.executescript(schema)
+                await db.commit()
         await fl.load_hashes(db)
         await dp.start_polling(
             bot,

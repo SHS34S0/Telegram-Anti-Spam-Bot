@@ -245,8 +245,8 @@ async def admin_start(message: Message, db):
 
     else:
         text = (
-                f"👋 <b>Вітаю, {html.bold(message.from_user.full_name)}!</b>\n"
-                + msg.NormalMessage.text_about
+            f"👋 <b>Вітаю, {html.bold(message.from_user.full_name)}!</b>\n"
+            + msg.NormalMessage.text_about
         )
         await message.answer(text)
 
@@ -254,19 +254,19 @@ async def admin_start(message: Message, db):
 @admin_router.callback_query(
     F.data.startswith(
         (
-                "on:",
-                "off:",
-                "stop_channel",
-                "stop_links",
-                "card_number",
-                "rus_language",
-                "stop_word",
-                "emoji_checker",
-                "reaction_spam",
-                "my_settings",
-                "name_group:",
-                "add_moder",
-                "remove_moder:",
+            "on:",
+            "off:",
+            "stop_channel",
+            "stop_links",
+            "card_number",
+            "rus_language",
+            "stop_word",
+            "emoji_checker",
+            "reaction_spam",
+            "my_settings",
+            "name_group:",
+            "add_moder",
+            "remove_moder:",
         )
     )
 )
@@ -277,8 +277,8 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         result = result.split(":")[2]
         member = await callback.bot.get_chat_member(chat_id, callback.from_user.id)
         if (
-                member.status in ["administrator", "creator"]
-                or callback.from_user.id == config.root
+            member.status in ["administrator", "creator"]
+            or callback.from_user.id == config.root
         ):
             await edit_setting(db, chat_id, result, 1)
             await callback.message.edit_text(
@@ -292,8 +292,8 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
         result = result.split(":")[2]
         member = await callback.bot.get_chat_member(chat_id, callback.from_user.id)
         if (
-                member.status in ["administrator", "creator"]
-                or callback.from_user.id == config.root
+            member.status in ["administrator", "creator"]
+            or callback.from_user.id == config.root
         ):
             await edit_setting(db, chat_id, result, 0)
             await callback.message.edit_text(

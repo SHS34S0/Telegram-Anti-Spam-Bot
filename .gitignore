@@ -8,6 +8,6 @@ test.py
 new.py
 service
 dc.json
-1.sql
+db/1.sql
 my_log.log
 .idea/
