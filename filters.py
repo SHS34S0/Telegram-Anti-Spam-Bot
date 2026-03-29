@@ -13,6 +13,8 @@ import logging
 import httpx
 from config import HF_TOKEN, MODEL, API_URL, TIMEOUT
 import messages as msg
+from collections import deque
+import time
 
 logger = logging.getLogger(__name__)
 #######################################################
@@ -23,6 +25,7 @@ with open("dc.json", "r", encoding="utf-8") as f:
 
 THRESHOLD = 5
 PHOTO_HASH = {}
+LINKS_HISTORY = {}
 
 
 async def load_hashes(db: aiosqlite.Connection):
@@ -495,3 +498,20 @@ def generate_message_link(message):
         # Закриті чати та супергрупи
         clean_chat_id = str(message.chat.id).replace("-100", "", 1)
         return f"https://t.me/c/{clean_chat_id}/{message.message_id}"
+
+
+def count_links(user_id, chat_id):
+    now = time.time()
+    if user_id not in LINKS_HISTORY:
+        LINKS_HISTORY[user_id] = deque()
+
+    LINKS_HISTORY[user_id].append(now)
+    LINKS_HISTORY[user_id].append(chat_id)
+    # 3 minutes
+    while LINKS_HISTORY[user_id] and now - LINKS_HISTORY[user_id][0] > 180:
+        LINKS_HISTORY[user_id].popleft()
+        LINKS_HISTORY[user_id].popleft()
+    # 3 messages = len 6
+    if len(LINKS_HISTORY[user_id]) > 5:
+        return True  # Mute
+    return False

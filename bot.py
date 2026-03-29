@@ -205,7 +205,6 @@ async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
 @dp.edited_message(F.chat.type.in_({"group", "supergroup"}))
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
     if message.from_user and message.from_user.id == 777000:
-        print("finish")
         return
     if message.new_chat_members or message.left_chat_member:
         return
@@ -328,20 +327,31 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         chat_id=c_id, user_id=message.from_user.id
                     )
                     if member_chat.status in ADMIN_STATUSES:
-                        print("Адміністратор")
                         pass  # все ок адмінам можна
                     elif fl.is_good_mention(message.entities, message.text):
                         pass
                     else:
                         await safe_delete(message)
-                        asyncio.create_task(
-                            send_timed_msg(
-                                bot,
-                                c_id,
-                                msg.SpamMessage.stop_links(u_id, user_full_name),
+                        if fl.count_links(u_id, c_id):
+                            await safe_mute(message, u_id)
+                            asyncio.create_task(
+                                send_timed_msg(
+                                    bot,
+                                    c_id,
+                                    msg.SpamMessage.stop_links_mute(
+                                        u_id, user_full_name
+                                    ),
+                                )
                             )
-                        )
-                        return  # Чат чистий, далі не йдемо
+                        else:
+                            asyncio.create_task(
+                                send_timed_msg(
+                                    bot,
+                                    c_id,
+                                    msg.SpamMessage.stop_links(u_id, user_full_name),
+                                )
+                            )
+                            return
                 except Exception as e:
                     logger.error(f"щось не так при спрацюванні посилання {e}")
                     await safe_delete(message)
@@ -350,7 +360,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                             bot, c_id, msg.SpamMessage.stop_links(u_id, user_full_name)
                         )
                     )
-                    return  # Чат чистий, далі не йдемо
+                    return
 
         ###################
         # Запис або оновлення паспорта

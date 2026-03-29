@@ -50,6 +50,10 @@ class SpamMessage:
         return f'⚠️ <a href="tg://user?id={u_id}">{user_full_name}</a> посилання в цьому чаті заборонені.'
 
     @staticmethod
+    def stop_links_mute(u_id: int, user_full_name: str):
+        return f'⚠️ <a href="tg://user?id={u_id}">{user_full_name}</a> посилання в цьому чаті заборонені.\nЧерез повторні порушення ви тимчасово переведені в тихий режим (мут).'
+
+    @staticmethod
     def stop_card_number(u_id: int, user_full_name: str):
         return f'⚠️ <a href="tg://user?id={u_id}">{user_full_name}</a> ваше повідомлення видалено.\nПричина: Номер картки без узгодження з адмінами.'
 
