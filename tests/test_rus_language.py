@@ -41,14 +41,14 @@ def test_rus_language():
     assert rus_language("нужен") == True
     assert rus_language("каждую") == True
 
-    assert rus_language("Паляниця") == None
-    assert rus_language("Укрзалізниця") == None
-    assert rus_language("привіт") == None
+    assert rus_language("Паляниця") == False
+    assert rus_language("Укрзалізниця") == False
+    assert rus_language("привіт") == False
     assert (
-        rus_language(
-            "Привіт усім! Підкажіть, будь ласка, як краще налаштувати aiogram для роботи з базою даних? Буду вдячний за допомогу."
-        )
-        == None
+            rus_language(
+                "Привіт усім! Підкажіть, будь ласка, як краще налаштувати aiogram для роботи з базою даних? Буду вдячний за допомогу."
+            )
+            == False
     )
 
-    assert rus_language("🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥") == None
+    assert rus_language("🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥") == False

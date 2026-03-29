@@ -59,6 +59,8 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
 
     # Якщо фото є, йдемо далі без зайвих відступів
     photo = photos.photos[0][-1]
+    if fl.check_hash(bot, photo):
+        return
     photo_file_id = photo.file_id
     suffix = photo.file_unique_id[-3:]
 
@@ -70,6 +72,7 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
 
     loop = asyncio.get_running_loop()
     photo_phash = await loop.run_in_executor(None, _get_phash_str, bio)
+
     clean_c_id = (
         str(c_id).replace("-100", "", 1) if str(c_id).startswith("-100") else str(c_id)
     )

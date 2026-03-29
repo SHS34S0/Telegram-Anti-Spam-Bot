@@ -10,12 +10,8 @@ from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, MEMBER
 from aiogram.types import (
     Message,
     ChatMemberUpdated,
-    CallbackQuery,
-    InlineKeyboardButton,
     ChatPermissions,
 )
-
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import MessageReactionUpdated
 
 import filters as fl
@@ -37,12 +33,7 @@ logging.basicConfig(
 )
 
 TOKEN = config.TOKEN
-VOITS = 3
-BAN24 = 86400
 ADMIN_STATUSES = {"administrator", "creator"}
-
-# варто переконатись чи то ще треба
-GOOD_STATUSES = {"member", "administrator", "creator"}
 
 
 ###############################
@@ -426,7 +417,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         u_id,
                         user_full_name,
                         chat_name,
-                        f"Біо\n{bio}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                        f"Біо\n\n{bio}\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                     )
             if await fl.check_user_avatar(bot, message.from_user.id):
                 # тепер тут тільки оповіщення для ручної перевірки
