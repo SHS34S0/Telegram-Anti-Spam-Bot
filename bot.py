@@ -137,7 +137,7 @@ dp.include_router(root.root_router)
 
 @dp.message_reaction()
 async def reaction_handler(
-    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+        reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
 ):
     user = reaction.user
     if not user:
@@ -421,6 +421,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         chat_name,
                         f"Біо БАН\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
                     )
+
                     return
                 else:  # тимчасово щоб наповнити базу
                     chat_info = await bot.get_chat(u_id)
@@ -517,6 +518,7 @@ async def main() -> None:
                 await db.executescript(schema)
                 await db.commit()
         await fl.load_hashes(db)
+        await fl.load_banned_users(db)
         await dp.start_polling(
             bot,
             db=db,
