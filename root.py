@@ -185,7 +185,9 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
         await callback.message.answer(f"Додано в чорний список")
     elif result.startswith("unblock"):
         await callback.message.answer(f"Відправляю запит зняття обмежень")
-        fl.GLOBAL_BANNED.discard(int(value))
+        # на випадок коли не вручну банив і ід нема в чорному списку
+        if int(value) in fl.GLOBAL_BANNED:
+            fl.GLOBAL_BANNED.discard(int(value))
         # status 0 is unban
         await fl.change_user_status(db, int(value), 0)
         await mass_unban(bot, db, int(value), 111)
