@@ -20,8 +20,8 @@ chats_info = {}
 async def mass_unban(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-            (ignore_chat_id,),
+                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+                (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -168,9 +168,9 @@ async def root_info(message: Message, bot: Bot, db):
 @root_router.callback_query(
     F.data.startswith(
         (
-            "black_list:",
-            "unblock:",
-            "add_photo:",
+                "black_list:",
+                "unblock:",
+                "add_photo:",
         )
     )
 )
@@ -179,16 +179,16 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
     value = list_data.split(":")[1]
     result = list_data.split(":")[0]
     if result.startswith("black_list"):
-        fl.GLOBAL_BANNED[int(value)] = True
+        fl.GLOBAL_BANNED.add(int(value))
         # status 1 is ban
         await fl.change_user_status(db, int(value), 1)
         await callback.message.answer(f"Додано в чорний список")
     elif result.startswith("unblock"):
         await callback.message.answer(f"Відправляю запит зняття обмежень")
-        await mass_unban(bot, db, int(value), 111)
-        del fl.GLOBAL_BANNED[int(value)]
+        fl.GLOBAL_BANNED.discard(int(value))
         # status 0 is unban
         await fl.change_user_status(db, int(value), 0)
+        await mass_unban(bot, db, int(value), 111)
     elif result.startswith("add_photo"):
         parts = list_data.split(":")
         user_to_clear = int(parts[1])

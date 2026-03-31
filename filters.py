@@ -26,16 +26,16 @@ with open("dc.json", "r", encoding="utf-8") as f:
 THRESHOLD = 5
 PHOTO_HASH = {}
 LINKS_HISTORY = {}
-GLOBAL_BANNED = {}
+GLOBAL_BANNED = set()
 
 
 async def load_banned_users(db):
     async with db.execute(
-        "SELECT user_id FROM users_global WHERE status = 1"
+            "SELECT user_id FROM users_global WHERE status = 1"
     ) as cursor:
         rows = await cursor.fetchall()
         for row in rows:
-            GLOBAL_BANNED[row[0]] = True
+            GLOBAL_BANNED.add(int(row[0]))
         print(f"✅ Завантажено {len(GLOBAL_BANNED)} користувачів в чорний список")
 
 
@@ -270,8 +270,8 @@ async def check_user_bio(bot, user_id):
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-            (ignore_chat_id,),
+                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+                (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -430,7 +430,7 @@ async def check_dc_number(bot, u_id):
 def is_good_mention(entities, message):
     for e in entities:
         if e.type == "mention":
-            mention_text = message[e.offset : e.offset + e.length]
+            mention_text = message[e.offset: e.offset + e.length]
             if mention_text.lower() == "@admin":
                 return True
     return False

@@ -137,7 +137,7 @@ dp.include_router(root.root_router)
 
 @dp.message_reaction()
 async def reaction_handler(
-    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+        reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
 ):
     user = reaction.user
     if not user:
@@ -149,7 +149,7 @@ async def reaction_handler(
     #  МИЛИЦЯ видалення повідомлення через 🤡
     if str(u_id) == str(config.root):
         for react in reaction.new_reaction:
-            if getattr(react, "emoji", None) == "🤡":
+            if getattr(react, "emoji", None) in ("🤡", "👎", "💩"):
                 try:
                     await bot.delete_message(
                         chat_id=c_id, message_id=reaction.message_id
@@ -232,7 +232,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             u_id,
             user_full_name,
             chat_name,
-            f"BLACK LIST\n\n{message.text[:200]}",
+            f"BLACK LIST\n\n{(message.text or 'Медіа')[:200]}",
         )
         return
     if settings:
@@ -266,7 +266,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 u_id,
                 user_full_name,
                 chat_name,
-                f"Шлюхо-символ\n\n{message.text[:200]}",
+                f"Шлюхо-символ\n\n{(message.text or 'Медіа')[:200]}",
             )
             asyncio.create_task(
                 send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
@@ -312,7 +312,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"emoji checker\n\n{message.text[:200]}",
+                    f"emoji checker\n\n{(message.text or 'Медіа')[:200]}",
                 )
                 asyncio.create_task(
                     send_timed_msg(
@@ -328,7 +328,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"emoji checker\n\n{message.text[:200]}",
+                    f"emoji checker\n\n{(message.text or 'Медіа')[:200]}",
                 )
                 # Мут
                 await safe_mute(message, u_id)
@@ -401,7 +401,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             if dc_number == 100:
                 await safe_delete(message)
                 await safe_ban(message, u_id)
-                fl.GLOBAL_BANNED[int(u_id)] = True
+                fl.GLOBAL_BANNED.add(int(u_id))
                 # status 1 is ban
                 await fl.change_user_status(db, int(u_id), 1)
                 asyncio.create_task(
@@ -417,10 +417,10 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
+                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
                 )
                 asyncio.create_task(
-                    send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
+                    send_timed_msg(bot, c_id, msg.SpamMessage.mute(user_full_name))
                 )
                 return
             bio = await fl.check_user_bio(bot, u_id)
@@ -483,7 +483,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                             chat_name,
                             f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
                         )
-                        fl.GLOBAL_BANNED[int(u_id)] = True
+                        fl.GLOBAL_BANNED.add(int(u_id))
                         # status 1 is ban
                         await fl.change_user_status(db, int(u_id), 1)
                         return
