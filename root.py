@@ -102,7 +102,7 @@ def moder_menu(user_id, photo_hash):
 
     builder.add(
         InlineKeyboardButton(
-            text="Bot", callback_data=f"mass_blocking:{user_id}", style="danger"
+            text="Bot", callback_data=f"black_list:{user_id}", style="danger"
         ),
         InlineKeyboardButton(
             text=f"📷 Додати фото", callback_data=f"add_photo:{user_id}:{photo_hash}"
@@ -168,7 +168,7 @@ async def root_info(message: Message, bot: Bot, db):
 @root_router.callback_query(
     F.data.startswith(
         (
-            "mass_blocking:",
+            "black_list:",
             "unblock:",
             "add_photo:",
         )
@@ -178,12 +178,17 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
     list_data = callback.data
     value = list_data.split(":")[1]
     result = list_data.split(":")[0]
-    if result.startswith("mass_blocking"):
-        await callback.message.answer(f"Починаю масове блокування")
-        await fl.mass_blocking(bot, db, int(value), 111)
+    if result.startswith("black_list"):
+        fl.GLOBAL_BANNED[int(value)] = True
+        # status 1 is ban
+        await fl.change_user_status(db, int(value), 1)
+        await callback.message.answer(f"Додано в чорний список")
     elif result.startswith("unblock"):
         await callback.message.answer(f"Відправляю запит зняття обмежень")
         await mass_unban(bot, db, int(value), 111)
+        del fl.GLOBAL_BANNED[int(value)]
+        # status 0 is unban
+        await fl.change_user_status(db, int(value), 0)
     elif result.startswith("add_photo"):
         parts = list_data.split(":")
         user_to_clear = int(parts[1])

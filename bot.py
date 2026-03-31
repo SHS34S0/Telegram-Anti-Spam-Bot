@@ -137,7 +137,7 @@ dp.include_router(root.root_router)
 
 @dp.message_reaction()
 async def reaction_handler(
-        reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
 ):
     user = reaction.user
     if not user:
@@ -220,6 +220,21 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     if c_id not in root.chats_info:
         root.chats_info[c_id] = chat_name
 
+    if u_id in fl.GLOBAL_BANNED:
+        await safe_delete(message)  # Безпечне видалення
+        await safe_ban(message, u_id)
+        asyncio.create_task(
+            send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
+        )
+        await root.user_info(
+            bot,
+            c_id,
+            u_id,
+            user_full_name,
+            chat_name,
+            f"BLACK LIST\n\n{message.text[:200]}",
+        )
+        return
     if settings:
         (
             owner_id,
@@ -251,7 +266,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 u_id,
                 user_full_name,
                 chat_name,
-                f"Шлюхо-символ\n\n{message.text[:800]}",
+                f"Шлюхо-символ\n\n{message.text[:200]}",
             )
             asyncio.create_task(
                 send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
@@ -297,7 +312,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"emoji checker\n\n{message.text[:800]}",
+                    f"emoji checker\n\n{message.text[:200]}",
                 )
                 asyncio.create_task(
                     send_timed_msg(
@@ -313,7 +328,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"emoji checker\n\n{message.text[:800]}",
+                    f"emoji checker\n\n{message.text[:200]}",
                 )
                 # Мут
                 await safe_mute(message, u_id)
@@ -386,6 +401,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             if dc_number == 100:
                 await safe_delete(message)
                 await safe_ban(message, u_id)
+                fl.GLOBAL_BANNED[int(u_id)] = True
+                # status 1 is ban
+                await fl.change_user_status(db, int(u_id), 1)
                 asyncio.create_task(
                     send_timed_msg(bot, c_id, msg.SpamMessage.spam_18(user_full_name))
                 )
@@ -399,7 +417,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
                 )
                 asyncio.create_task(
                     send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
@@ -419,7 +437,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         u_id,
                         user_full_name,
                         chat_name,
-                        f"Біо БАН\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                        f"Біо БАН\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
                     )
 
                     return
@@ -432,7 +450,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         u_id,
                         user_full_name,
                         chat_name,
-                        f"Біо\n\n{bio}\n\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                        f"Біо\n\n{bio}\n\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
                     )
             if await fl.check_user_avatar(bot, message.from_user.id):
                 # тепер тут тільки оповіщення для ручної перевірки
@@ -443,7 +461,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\n{fl.generate_message_link(message)}\n\n{message.text[:800]}",
+                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
                 )
             if message.from_user.is_premium and u_id > 7700000000:
                 ################################################################################
@@ -463,8 +481,11 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                             u_id,
                             user_full_name,
                             chat_name,
-                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:800]}",
+                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
                         )
+                        fl.GLOBAL_BANNED[int(u_id)] = True
+                        # status 1 is ban
+                        await fl.change_user_status(db, int(u_id), 1)
                         return
                 await root.user_info(
                     bot,
@@ -472,7 +493,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:800]}",
+                    f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
                 )
 
         else:
