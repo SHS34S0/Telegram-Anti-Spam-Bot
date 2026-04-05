@@ -20,8 +20,8 @@ chats_info = {}
 async def mass_unban(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-                (ignore_chat_id,),
+            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+            (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -127,6 +127,7 @@ async def root_info(message: Message, bot: Bot, db):
         user_full_name = message.from_user.full_name
         chat_name = message.chat.title or "Особисті повідомлення"
         if message.text and message.text.isdigit():
+            fl.GLOBAL_BANNED.add(int(message.text))
             await fl.mass_blocking(bot, db, int(message.text), 111)
 
             await user_info(
@@ -168,9 +169,9 @@ async def root_info(message: Message, bot: Bot, db):
 @root_router.callback_query(
     F.data.startswith(
         (
-                "black_list:",
-                "unblock:",
-                "add_photo:",
+            "black_list:",
+            "unblock:",
+            "add_photo:",
         )
     )
 )

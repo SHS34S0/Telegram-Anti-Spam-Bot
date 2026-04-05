@@ -226,13 +226,8 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
         asyncio.create_task(
             send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
         )
-        await root.user_info(
-            bot,
-            c_id,
-            u_id,
-            user_full_name,
-            chat_name,
-            f"BLACK LIST\n\n{(message.text or 'Медіа')[:200]}",
+        logger.warning(
+            f"Користувач {u_id} заблокований в {c_id} оскільки вже був в BLACK LIST"
         )
         return
     if settings:
@@ -260,14 +255,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
         if message.text and fl.has_weird_chars(message.text):
             await safe_delete(message)  # Безпечне видалення
             await safe_ban(message, u_id)
-            await root.user_info(
-                bot,
-                c_id,
-                u_id,
-                user_full_name,
-                chat_name,
-                f"Шлюхо-символ\n\n{(message.text or 'Медіа')[:200]}",
-            )
             asyncio.create_task(
                 send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
             )
