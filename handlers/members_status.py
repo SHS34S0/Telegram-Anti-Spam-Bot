@@ -20,7 +20,8 @@ async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
             c_id = event.chat.id
             chat_name = event.chat.title
             lifespan = await fl.get_user_lifespan(db, user_banned, c_id) / 60
-
+            if lifespan > 400:  # minutes, is old
+                return
             logger.warning(
                 f"Користувач {user_banned} був заблокований в {c_id} {chat_name} адміністратором {admin_who_banned} час життя в чаті {lifespan} хвилин"
             )
@@ -33,3 +34,7 @@ async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
                 chat_name,
                 f"\n🤲 Ручний бан користувача з ід {user_banned}\nЧас підписки {lifespan} хвилин",
             )
+
+
+def reaction():
+    return None
