@@ -1,23 +1,20 @@
 import asyncio
 import os
 import sys
-import time
 import aiosqlite
 import config
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, MEMBER
 from aiogram.types import (
     Message,
-    ChatMemberUpdated,
-    ChatPermissions,
 )
 import filters as fl
 import root
 from admin_panel import admin_router
 from handlers.members_status import status_members
 from handlers.reaction import message_reaction
+from handlers.new_users import new_users
 import logging
 import messages as msg
 import utils
@@ -43,35 +40,9 @@ dp.include_router(admin_router)
 dp.include_router(root.root_router)
 dp.include_router(status_members)
 dp.include_router(message_reaction)
+dp.include_router(new_users)
 
 
-##########################################################################################
-
-
-# обробка вступу
-@dp.chat_member(ChatMemberUpdatedFilter(member_status_changed=IS_NOT_MEMBER >> MEMBER))
-async def on_user_join(event: ChatMemberUpdated, db: aiosqlite.Connection):
-    c_id = event.chat.id
-    user_id = event.new_chat_member.user.id
-    full_name = event.new_chat_member.user.full_name
-    username = event.new_chat_member.user.username  # Може бути None
-
-    await fl.register_or_update_passport(db, user_id, full_name, username)
-    await db.execute(
-        """
-        INSERT INTO chat_stats (user_id, channel_id, join_date)
-        VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id) DO
-        UPDATE SET join_date = CURRENT_TIMESTAMP
-        """,
-        (user_id, c_id),
-    )
-    await db.commit()
-    logger.warning(
-        f"Користувач {full_name} ({username}, {user_id}) приєднався до чату {event.chat.title} ({c_id})"
-    )
-
-
-############
 @dp.message(F.chat.type.in_({"group", "supergroup"}))
 @dp.edited_message(F.chat.type.in_({"group", "supergroup"}))
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
