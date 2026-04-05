@@ -18,6 +18,7 @@ from aiogram.types import MessageReactionUpdated
 import filters as fl
 import root
 from admin_panel import admin_router
+from handlers.members_status import status_members
 import logging
 import messages as msg
 
@@ -130,6 +131,7 @@ async def send_timed_msg(bot, chat_id, text, delay=60):
 dp = Dispatcher()
 dp.include_router(admin_router)
 dp.include_router(root.root_router)
+dp.include_router(status_members)
 
 
 ##########################################################################################
