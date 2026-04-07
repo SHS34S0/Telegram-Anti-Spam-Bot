@@ -134,6 +134,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 pass
             elif kef >= 70:
                 await utils.safe_delete(message)
+                # await bot.delete_message(chat_id=-1001234567890, message_id=2493340)
                 await root.user_info(
                     bot,
                     c_id,
@@ -285,6 +286,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         user_full_name,
                         chat_name,
                         f"Біо\n\n{bio}\n\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
+                        message.message_id,
                     )
             if await fl.check_user_avatar(bot, message.from_user.id):
                 # тепер тут тільки оповіщення для ручної перевірки
@@ -328,6 +330,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     user_full_name,
                     chat_name,
                     f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
+                    message.message_id,
                 )
 
         else:

@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Bot, F, Router
 import aiosqlite
 import filters as fl
@@ -10,35 +12,66 @@ from aiogram.types import (
     Message,
     CallbackQuery,
     InlineKeyboardButton,
+    ChatPermissions,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 
 chats_info = {}
 
+logger = logging.getLogger(__name__)
+
 
 async def mass_unban(bot, db, user_id, ignore_chat_id):
+    # All permissions enabled used to restore a muted user
+    full_permissions = ChatPermissions(
+        can_send_messages=True,
+        can_send_media_messages=True,
+        can_send_polls=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True,
+        can_change_info=False,
+        can_invite_users=True,
+        can_pin_messages=False,
+    )
+
     try:
         async with db.execute(
-                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-                (ignore_chat_id,),
+            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+            (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
         if not all_chats:
             return
 
-        print(f"Починаю розбан юзера {user_id} у {len(all_chats)} чатах...")
+        print(f"Починаю розбан/розмут юзера {user_id} у {len(all_chats)} чатах...")
         for row in all_chats:
             await asyncio.sleep(0.9)
-            target_chat_id = row[
-                0
-            ]  # Результат це список кортежів [(123,), (456,)], беремо [0]
+            target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
+
+            # Step 1: try to unmute (restore permissions). Fails if user is banned — that's ok.
             try:
-                await bot.unban_chat_member(chat_id=target_chat_id, user_id=user_id)
+                await bot.restrict_chat_member(
+                    chat_id=target_chat_id,
+                    user_id=user_id,
+                    permissions=full_permissions,
+                )
+                print(f"Розмучено в чаті {target_chat_id}")
+            except Exception as e:
+                print(f"restrict не вдалось {target_chat_id}: {e}")
+
+            # Step 2: unban only if actually banned (safe for non-banned users)
+            try:
+                await bot.unban_chat_member(
+                    chat_id=target_chat_id,
+                    user_id=user_id,
+                    only_if_banned=True,
+                )
                 print(f"Розбанено в чаті {target_chat_id}")
             except Exception as e:
-                print(f"Не вдалось розбанити {target_chat_id}: {e}")
+                print(f"unban не вдалось {target_chat_id}: {e}")
+
     except Exception as e:
         print(f"Помилка при розблокуванні: {e}")
 
@@ -47,7 +80,9 @@ def _get_phash_str(bio):
     return str(imagehash.phash(Image.open(bio)))
 
 
-async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
+async def user_info(
+    bot, c_id, u_id, user_full_name, chat_name, text, message_id: int | None = None
+):
     photos = await bot.get_user_profile_photos(u_id, limit=1)
 
     # Якщо фото немає — відправляємо текст і одразу виходимо (return)
@@ -61,8 +96,8 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
 
     # Якщо фото є, йдемо далі без зайвих відступів
     photo = photos.photos[0][-1]
+    # Якщо фото в базі нам звіт не потрібен
     if await fl.check_hash(bot, photo):
-        print("FOTO IN BAZA")
         return
     photo_file_id = photo.file_id
     suffix = photo.file_unique_id[-3:]
@@ -90,8 +125,25 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
 
     # Second alert for same user = auto-ban without sending photo again
     if u_id in fl.SUSPICIOUS_USERS:
+        logger.warning(
+            f"Користувач вдруге засвітився як підозрілий {c_id}, {u_id}, {user_full_name}\n {text}"
+        )
         fl.SUSPICIOUS_USERS.discard(int(u_id))  # type: ignore[attr-defined]
         fl.GLOBAL_BANNED.add(u_id)
+
+        # Delete the message that triggered this alert
+        if message_id:
+            try:
+                await bot.delete_message(chat_id=c_id, message_id=message_id)
+            except Exception as e:
+                print(f"Auto-ban: failed to delete message {message_id}: {e}")
+
+        # Ban user in the current chat immediately
+        try:
+            await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
+        except Exception as e:
+            print(f"Auto-ban: failed to ban {u_id} in {c_id}: {e}")
+
         await bot.send_message(
             chat_id=str(config.root),
             text=f"🚫 <a href='tg://user?id={u_id}'>{user_full_name}</a> — авто-бан (повторне спрацювання)",
@@ -183,9 +235,9 @@ async def root_info(message: Message, bot: Bot, db):
 @root_router.callback_query(
     F.data.startswith(
         (
-                "black_list:",
-                "unblock:",
-                "add_photo:",
+            "black_list:",
+            "unblock:",
+            "add_photo:",
         )
     )
 )
