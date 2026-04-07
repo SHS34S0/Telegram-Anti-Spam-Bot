@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @message_reaction.message_reaction()
 async def reaction_handler(
-        reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
 ):
     user = reaction.user
     if not user:

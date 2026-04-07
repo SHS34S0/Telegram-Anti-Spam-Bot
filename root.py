@@ -20,8 +20,8 @@ chats_info = {}
 async def mass_unban(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-            (ignore_chat_id,),
+                "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+                (ignore_chat_id,),
         ) as cursor:
             all_chats = await cursor.fetchall()
 
@@ -87,6 +87,20 @@ async def user_info(bot, c_id, u_id, user_full_name, chat_name, text):
         f"Full hash: <code>{photo.file_unique_id}</code>\n"
         f"Фільтр: {text}"
     )
+
+    # Second alert for same user = auto-ban without sending photo again
+    if u_id in fl.SUSPICIOUS_USERS:
+        fl.SUSPICIOUS_USERS.discard(int(u_id))  # type: ignore[attr-defined]
+        fl.GLOBAL_BANNED.add(u_id)
+        await bot.send_message(
+            chat_id=str(config.root),
+            text=f"🚫 <a href='tg://user?id={u_id}'>{user_full_name}</a> — авто-бан (повторне спрацювання)",
+            parse_mode="HTML",
+        )
+        return
+
+    # First alert — remember the user and send photo for manual review
+    fl.SUSPICIOUS_USERS.add(u_id)
 
     await bot.send_photo(
         chat_id=str(config.root),
@@ -169,9 +183,9 @@ async def root_info(message: Message, bot: Bot, db):
 @root_router.callback_query(
     F.data.startswith(
         (
-            "black_list:",
-            "unblock:",
-            "add_photo:",
+                "black_list:",
+                "unblock:",
+                "add_photo:",
         )
     )
 )
@@ -189,6 +203,8 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
         # на випадок коли не вручну банив і ід нема в чорному списку
         if int(value) in fl.GLOBAL_BANNED:
             fl.GLOBAL_BANNED.discard(int(value))
+        if int(value) in fl.SUSPICIOUS_USERS:
+            fl.SUSPICIOUS_USERS.discard(int(value))  # type: ignore[attr-defined]
         # status 0 is unban
         await fl.change_user_status(db, int(value), 0)
         await mass_unban(bot, db, int(value), 111)

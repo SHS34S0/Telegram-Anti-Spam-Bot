@@ -1,7 +1,7 @@
 import re
 import asyncio
 import os
-from nudenet import NudeDetector
+from nudenet import NudeDetector  # type: ignore[import-untyped]
 from async_lru import alru_cache
 import json
 import imagehash
@@ -24,9 +24,10 @@ with open("dc.json", "r", encoding="utf-8") as f:
 
 
 THRESHOLD = 5
-PHOTO_HASH = {}
+PHOTO_HASH = {}  # type: ignore[var-annotated]
 LINKS_HISTORY = {}
 GLOBAL_BANNED = set()
+SUSPICIOUS_USERS = set()  # type: ignore[var-annotated]
 
 
 async def load_banned_users(db):
