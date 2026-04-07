@@ -76,7 +76,6 @@ MUTE_LIST = {
 }
 
 
-@alru_cache(maxsize=50000)
 async def check_user_avatar(bot, user_id: int):
     # Якщо детектор не запустився, пропускаємо юзера
     if _nude_detector is None:
@@ -242,7 +241,6 @@ async def get_channel_owner(bot: Bot, channel_id: int):
     return None
 
 
-@alru_cache(maxsize=50000)
 async def check_user_bio(bot, user_id):
     try:
         chat_info = await bot.get_chat(user_id)

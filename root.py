@@ -86,6 +86,7 @@ async def user_info(
     photos = await bot.get_user_profile_photos(u_id, limit=1)
 
     # Якщо фото немає — відправляємо текст і одразу виходимо (return)
+    # з часом потрібно преевірити чи є це проблема не додати в чорний список підозрюваного без фото
     if not photos.total_count:
         await bot.send_message(
             chat_id=str(config.root),
@@ -207,7 +208,7 @@ async def root_info(message: Message, bot: Bot, db):
         if message.text and message.text.lower() == "cache":
             await bot.send_message(
                 chat_id=str(config.root),
-                text=f"📊 КЕШ каналів: {fl.get_chat_settings.cache_info()}\n📊 КЕШ учасників: {fl.msg_count.cache_info()}\n📊 КЕШ DC: {fl.check_dc_number.cache_info()}\n📊 КЕШ Біо: {fl.check_user_bio.cache_info()}\n📊 КЕШ Фото: {fl.check_user_avatar.cache_info()}",
+                text=f"📊 КЕШ каналів: {fl.get_chat_settings.cache_info()}\n📊 КЕШ учасників: {fl.msg_count.cache_info()}\n📊 КЕШ DC: {fl.check_dc_number.cache_info()}",
                 parse_mode="HTML",
             )
         if message.text and message.text.lower() == "chats":
