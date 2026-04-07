@@ -546,4 +546,6 @@ async def get_user_lifespan(db, user_id, chat_id):
         (user_id, chat_id),
     )
     seconds = await cursor.fetchone()
-    return seconds[1]
+    if seconds:
+        return seconds[1]
+    return None
