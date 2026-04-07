@@ -266,7 +266,7 @@ async def check_user_bio(bot, user_id):
     return False  # Все чисто
 
 
-### ймовірно це тепер чисто рут фіча і треба прибрати звідси ?
+# потрібно переробити на зняття мут чи блоку але без видалення з спільноти якщо мут
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
     try:
         async with db.execute(
@@ -339,13 +339,11 @@ def rus_language(text):
 
 
 def check_card(text):
-    # все що не цифра, замінити на пустоту
-    clean_text = re.sub(r"\D", "", text)
-    possible_cards = re.findall(r"\d{16}", clean_text)
-    if not possible_cards:
-        return False
-    for number in possible_cards:
-        if luhn_check(number):
+    # Шукаємо 16 цифр, між якими не більше 3 нецифрових символів поспіль.
+    pattern = r"\d(?:\D{0,3}\d){15}"
+    for match in re.finditer(pattern, text):
+        digits = re.sub(r"\D", "", match.group())
+        if luhn_check(digits):
             return True
     return False
 

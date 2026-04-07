@@ -1,6 +1,7 @@
 import pytest
 from filters import check_card
 
+
 def test_is_card():
     assert check_card("5488 5500 4199 3308") == True
     assert check_card("5488550041993308") == True
@@ -20,5 +21,15 @@ def test_is_card():
     assert check_card("Збір 44 411110 13726 59 коштів") == False
     assert check_card("44 411110 13726 59 коштів") == False
     assert check_card("444111101372659 коштів") == False
-
-
+    assert (
+            check_card(
+                "Рейс 341 відправляється о 12:30, зупинки о 14:45 і 16:20, прибуття о 18:55"
+            )
+            == False
+    )
+    assert (
+            check_card(
+                "Ціни: товар 1 — 120 грн, товар 2 — 340 грн, товар 3 — 560 грн, разом 1020 грн"
+            )
+            == False
+    )
