@@ -15,6 +15,7 @@ from config import HF_TOKEN, MODEL, API_URL, TIMEOUT
 import messages as msg
 from collections import deque
 import time
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 #######################################################
@@ -57,7 +58,7 @@ try:
 except Exception as er:
     logger.error(f"Помилка запуску {er}")
     _nude_detector = None
-_nude_semaphore: asyncio.Semaphore | None = None  # created lazily inside the event loop
+_nude_semaphore: Optional[asyncio.Semaphore] = None
 # 0.60
 BAN_LIST = {
     # гола шкіра
