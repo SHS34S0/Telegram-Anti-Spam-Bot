@@ -57,7 +57,7 @@ try:
 except Exception as er:
     logger.error(f"Помилка запуску {er}")
     _nude_detector = None
-_nude_semaphore = asyncio.Semaphore(2)  # кількість потоків
+_nude_semaphore: asyncio.Semaphore | None = None  # created lazily inside the event loop
 # 0.60
 BAN_LIST = {
     # гола шкіра
@@ -77,9 +77,15 @@ MUTE_LIST = {
 
 
 async def check_user_avatar(bot, user_id: int):
+    global _nude_semaphore
     # Якщо детектор не запустився, пропускаємо юзера
     if _nude_detector is None:
         return False
+
+    # Create semaphore here, inside the running loop (avoids "wrong loop" error in Python 3.8)
+    if _nude_semaphore is None:
+        _nude_semaphore = asyncio.Semaphore(2)
+    semaphore = _nude_semaphore
 
     file_path = f"temp_avatar_{user_id}.jpg"
 
@@ -98,10 +104,9 @@ async def check_user_avatar(bot, user_id: int):
         file = await bot.get_file(photo_file_id)
         await bot.download_file(file.file_path, file_path)
 
-        # Отримуємо поточний цикл подій
+        # run detector in thread pool
         loop = asyncio.get_running_loop()
-        # Запускаємо в окремому потоці
-        async with _nude_semaphore:
+        async with semaphore:
             detections = await loop.run_in_executor(
                 None, _nude_detector.detect, file_path
             )

@@ -80,8 +80,11 @@ def _get_phash_str(bio):
     return str(imagehash.phash(Image.open(bio)))
 
 
+from typing import Optional
+
+
 async def user_info(
-    bot, c_id, u_id, user_full_name, chat_name, text, message_id: int | None = None
+    bot, c_id, u_id, user_full_name, chat_name, text, message_id: Optional[int] = None
 ):
     photos = await bot.get_user_profile_photos(u_id, limit=1)
 
