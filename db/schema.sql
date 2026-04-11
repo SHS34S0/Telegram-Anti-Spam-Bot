@@ -76,6 +76,14 @@ CREATE TABLE "votes_log"
     UNIQUE ("voting_m_id", "voter_id")
 );
 
+CREATE TABLE IF NOT EXISTS "report_mutes"
+(
+    "admin_id" INTEGER NOT NULL,
+    "chat_id"  INTEGER NOT NULL,
+    "status"   INTEGER NOT NULL DEFAULT 1 CHECK ("status" IN (0, 1)),
+    UNIQUE ("admin_id", "chat_id")
+);
+
 --- this may come in handy later
 CREATE TRIGGER "track_name_changes"
     BEFORE UPDATE

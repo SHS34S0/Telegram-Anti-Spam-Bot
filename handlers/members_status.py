@@ -13,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 @status_members.chat_member()
 async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
+    c_id = event.chat.id
+    user_id = event.new_chat_member.user.id
+    old_status = event.old_chat_member.status
+    new_status = event.new_chat_member.status
+    admin_statuses = {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}
+
+    # Keep ADMINS_CACHE in sync when admins are added or removed
+    if c_id in fl.ADMINS_CACHE:
+        if new_status in admin_statuses:
+            fl.ADMINS_CACHE[c_id].add(user_id)
+        elif old_status in admin_statuses:
+            fl.ADMINS_CACHE[c_id].discard(user_id)
+
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
 
         if event.from_user.id != bot.id:

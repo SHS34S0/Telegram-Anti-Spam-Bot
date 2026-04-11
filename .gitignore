@@ -12,5 +12,5 @@ db/1.sql
 my_log.log
 .idea/
 CLAUDE.md
-DOCS.md
+DOCS/
 upgrade_bot.py

@@ -3,7 +3,7 @@ import os
 import sys
 import aiosqlite
 import config
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import (
@@ -15,6 +15,7 @@ from admin_panel import admin_router
 from handlers.members_status import status_members
 from handlers.reaction import message_reaction
 from handlers.new_users import new_users
+from handlers.reports import report_router
 import logging
 import messages as msg
 import utils
@@ -37,14 +38,21 @@ ADMIN_STATUSES = {"administrator", "creator"}
 # Усі обробники мають бути підключені до маршрутизатора (або диспетчера)
 dp = Dispatcher()
 dp.include_router(admin_router)
+# report_router must be before root_router: root_router has a catch-all private handler
+# that would eat /reports before report_router ever sees it
+dp.include_router(report_router)
 dp.include_router(root.root_router)
 dp.include_router(status_members)
 dp.include_router(message_reaction)
 dp.include_router(new_users)
 
+# Wrap echo_handler in its own router so report_router takes priority
+main_router = Router()
+dp.include_router(main_router)
 
-@dp.message(F.chat.type.in_({"group", "supergroup"}))
-@dp.edited_message(F.chat.type.in_({"group", "supergroup"}))
+
+@main_router.message(F.chat.type.in_({"group", "supergroup"}))
+@main_router.edited_message(F.chat.type.in_({"group", "supergroup"}))
 async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
     if message.from_user and message.from_user.id == 777000:
         return
