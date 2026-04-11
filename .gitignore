@@ -13,3 +13,4 @@ my_log.log
 .idea/
 CLAUDE.md
 DOCS.md
+upgrade_bot.py
