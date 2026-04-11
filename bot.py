@@ -57,6 +57,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
     settings = await fl.get_chat_settings(db, c_id)
+    # caption is used when media has a text under it (photo, video, etc.)
+    text = message.text or message.caption
+    entities = message.entities or message.caption_entities
     # active chats
     if c_id not in root.chats_info:
         root.chats_info[c_id] = chat_name
@@ -93,14 +96,14 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             await utils.safe_delete(message)
             return
         ## Перевірок на шлюхо-символи
-        if message.text and fl.has_weird_chars(message.text):
+        if text and fl.has_weird_chars(text):
             await utils.safe_delete(message)  # Безпечне видалення
             await utils.safe_ban(message, u_id)
             asyncio.create_task(
                 utils.send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
             )
             return
-        if message.text and card_number == 1 and fl.check_card(message.text):
+        if text and card_number == 1 and fl.check_card(text):
             try:  # Якщо було спрацювання
                 member_chat = await bot.get_chat_member(
                     chat_id=c_id, user_id=message.from_user.id
@@ -128,8 +131,8 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     )
                 )
                 return  # Чат чистий, далі не йдемо
-        if message.text and emoji_checker == 1:
-            kef = fl.emoji_checker(message.text)
+        if text and emoji_checker == 1:
+            kef = fl.emoji_checker(text)
             if kef >= 90:
                 pass
             elif kef >= 70:
@@ -141,7 +144,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"emoji checker\n\n{(message.text or 'Медіа')[:200]}",
+                    f"emoji checker\n\n{(text or 'Медіа')[:200]}",
                 )
                 asyncio.create_task(
                     utils.send_timed_msg(
@@ -157,7 +160,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"emoji checker\n\n{(message.text or 'Медіа')[:200]}",
+                    f"emoji checker\n\n{(text or 'Медіа')[:200]}",
                 )
                 # Мут
                 await utils.safe_mute(message, u_id)
@@ -169,14 +172,14 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 return
         if stop_links == 1:
             bad_types = {"mention", "url", "text_link"}
-            if message.entities and any(e.type in bad_types for e in message.entities):
+            if entities and any(e.type in bad_types for e in entities):
                 try:  # Якщо було спрацювання
                     member_chat = await bot.get_chat_member(
                         chat_id=c_id, user_id=message.from_user.id
                     )
                     if member_chat.status in ADMIN_STATUSES:
                         pass  # все ок адмінам можна
-                    elif fl.is_good_mention(message.entities, message.text):
+                    elif fl.is_good_mention(entities, text):
                         pass
                     else:
                         await utils.safe_delete(message)
@@ -248,7 +251,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
+                    f"DC {dc_number}\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(text or 'Медіа')[:200]}",
                 )
                 asyncio.create_task(
                     utils.send_timed_msg(
@@ -272,7 +275,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         u_id,
                         user_full_name,
                         chat_name,
-                        f"Біо БАН\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
+                        f"Біо БАН\n{fl.generate_message_link(message)}\n\n{(text or '')[:200]}",
                     )
 
                     return
@@ -285,7 +288,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         u_id,
                         user_full_name,
                         chat_name,
-                        f"Біо\n\n{bio}\n\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
+                        f"Біо\n\n{bio}\n\n{fl.generate_message_link(message)}\n\n{(text or '')[:200]}",
                         message.message_id,
                     )
             if await fl.check_user_avatar(bot, message.from_user.id):
@@ -297,12 +300,12 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\n{fl.generate_message_link(message)}\n\n{message.text[:200]}",
+                    f"Фото\nn⛔️⛔️⛔️⛔️⛔️⛔️\n{fl.generate_message_link(message)}\n\n{(text or '')[:200]}",
                 )
             if message.from_user.is_premium and u_id > 7700000000:
                 ################################################################################
-                if message.text:
-                    if await fl.is_spam(message.text):
+                if text:
+                    if await fl.is_spam(text):
                         # винести функцією показала гуд
                         await utils.safe_ban(message, u_id)
                         await utils.safe_delete(message)
@@ -317,7 +320,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                             u_id,
                             user_full_name,
                             chat_name,
-                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
+                            f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(text or 'Медіа')[:200]}",
                         )
                         fl.GLOBAL_BANNED.add(int(u_id))
                         # status 1 is ban
@@ -329,13 +332,13 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                     u_id,
                     user_full_name,
                     chat_name,
-                    f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(message.text or 'Медіа')[:200]}",
+                    f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(text or 'Медіа')[:200]}",
                     message.message_id,
                 )
 
         else:
-            if message.text and rus_language == 1:
-                if fl.rus_language(message.text):
+            if text and rus_language == 1:
+                if fl.rus_language(text):
                     await utils.safe_delete(message)
                     asyncio.create_task(
                         utils.send_timed_msg(
