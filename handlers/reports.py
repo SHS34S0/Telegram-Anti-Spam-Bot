@@ -48,6 +48,26 @@ def _make_link(chat_id: int, message_id: int) -> str | None:
     return None
 
 
+def _mute_extend_keyboard(chat_id: int, user_id: int):
+    """Buttons shown after the default 24h mute — let admin extend if needed."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="📅 Тиждень",
+            callback_data=f"report_mute_ext:week:{chat_id}:{user_id}",
+        ),
+        InlineKeyboardButton(
+            text="🗓 Місяць",
+            callback_data=f"report_mute_ext:month:{chat_id}:{user_id}",
+        ),
+        InlineKeyboardButton(
+            text="♾ Назавжди",
+            callback_data=f"report_mute_ext:forever:{chat_id}:{user_id}",
+        ),
+    )
+    return builder.as_markup()
+
+
 def _report_keyboard(chat_id: int, user_id: int):
     builder = InlineKeyboardBuilder()
     builder.row(
@@ -56,11 +76,11 @@ def _report_keyboard(chat_id: int, user_id: int):
             callback_data=f"report_ban:{chat_id}:{user_id}",
         ),
         InlineKeyboardButton(
-            text="🔇 Мут 24г",
+            text="🔇 Мут",
             callback_data=f"report_mute:{chat_id}:{user_id}",
         ),
         InlineKeyboardButton(
-            text="✅ Ігнорувати",
+            text="✅ Ігнор",
             callback_data=f"report_ignore:{chat_id}:{user_id}",
         ),
     )
@@ -268,7 +288,20 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
             logger.warning(
                 f"REPORT MUTE: user {user_id} in {chat_id} by {callback.from_user.id}"
             )
-            result_text = f"🔇 Замучено на 24г. Дія: {actor}"
+            result_text = f"🔇 Замучено на 24г (дефолт). Дія: {actor}"
+            # Show extend buttons so admin can escalate without extra steps
+            extend_keyboard = _mute_extend_keyboard(chat_id, user_id)
+            try:
+                await callback.message.edit_text(
+                    callback.message.html_text + f"\n\n<b>{result_text}</b>\n"
+                    "<i>Хочете продовжити мут?</i>",
+                    reply_markup=extend_keyboard,
+                    disable_web_page_preview=True,
+                )
+            except Exception as e:
+                logger.warning(f"Cannot edit mute message: {e}")
+            await callback.answer(result_text)
+            return
         except Exception as e:
             logger.error(f"Report mute failed: {e}")
             result_text = "❌ Не вдалося замутити."
@@ -278,11 +311,73 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
 
     try:
         await callback.message.edit_text(
-            callback.message.text + f"\n\n<b>{result_text}</b>",
+            callback.message.html_text + f"\n\n<b>{result_text}</b>",
             disable_web_page_preview=True,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Cannot edit report message: {e}")
+
+    await callback.answer(result_text)
+
+
+# ─── Mute extend buttons ─────────────────────────────────────────
+
+
+@report_router.callback_query(F.data.startswith("report_mute_ext:"))
+async def report_mute_extend(callback: CallbackQuery, bot: Bot):
+    parts = callback.data.split(":")
+    duration = parts[1]  # week / month / forever
+    chat_id = int(parts[2])
+    user_id = int(parts[3])
+
+    # Verify the person clicking is still an admin
+    try:
+        admin_ids = await _get_admins(bot, chat_id)
+        if callback.from_user.id not in admin_ids:
+            await callback.answer(
+                "Тільки адміни чату можуть це зробити.", show_alert=True
+            )
+            return
+    except Exception as e:
+        logger.error(f"Cannot check admin status in {chat_id}: {e}")
+        await callback.answer("Не вдалося перевірити права.", show_alert=True)
+        return
+
+    actor = callback.from_user.full_name
+
+    duration_map = {
+        "week": ("тиждень", 7 * 86400),
+        "month": ("місяць", 30 * 86400),
+        "forever": ("назавжди", 0),  # 0 = permanent in Telegram API
+    }
+    label, seconds = duration_map[duration]
+
+    try:
+        kwargs = dict(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False),
+        )
+        if seconds:
+            kwargs["until_date"] = int(time.time()) + seconds
+        await bot.restrict_chat_member(**kwargs)
+        logger.warning(
+            f"REPORT MUTE EXT ({label}): user {user_id} in {chat_id} by {callback.from_user.id}"
+        )
+        result_text = f"🔇 Мут продовжено на {label}. Дія: {actor}"
+    except Exception as e:
+        logger.error(f"Report mute extend failed: {e}")
+        result_text = "❌ Не вдалося продовжити мут."
+
+    try:
+        # html_text keeps original formatting; split removes the "extend?" hint line
+        base = callback.message.html_text.split("\n<i>")[0]
+        await callback.message.edit_text(
+            base + f"\n\n<b>{result_text}</b>",
+            disable_web_page_preview=True,
+        )
+    except Exception as e:
+        logger.warning(f"Cannot edit mute extend message: {e}")
 
     await callback.answer(result_text)
 
