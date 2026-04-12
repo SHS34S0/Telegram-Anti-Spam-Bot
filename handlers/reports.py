@@ -90,6 +90,15 @@ async def _register_admins(db: aiosqlite.Connection, admin_ids: set[int], chat_i
     await db.commit()
 
 
+async def set_report_status(db: aiosqlite.Connection, admin_id: int, chat_id: int, status: int):
+    """Set report notification status for an admin in a chat (0=off, 1=on)."""
+    await db.execute(
+        "UPDATE report_mutes SET status = ? WHERE admin_id = ? AND chat_id = ?",
+        (status, admin_id, chat_id),
+    )
+    await db.commit()
+
+
 async def _get_active_recipients(db: aiosqlite.Connection, chat_id: int) -> list[int]:
     """Return admin_ids who have status=1 (want to receive reports) for this chat."""
     c = await db.cursor()
@@ -174,9 +183,9 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
             # Admin hasn't started the bot — skip silently
             pass
 
-    if sent_count == 0:
-        from utils import send_timed_msg
+    from utils import send_timed_msg
 
+    if sent_count == 0:
         asyncio.create_task(
             send_timed_msg(
                 bot,
@@ -185,6 +194,15 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
                 "в особистих повідомленнях — сповіщення не надіслано. "
                 "Попросіть адмінів написати /start цьому боту.",
                 delay=45,
+            )
+        )
+    else:
+        asyncio.create_task(
+            send_timed_msg(
+                bot,
+                chat_id,
+                "✅ Скаргу надіслано адміністраторам.",
+                delay=30,
             )
         )
 
@@ -319,6 +337,17 @@ async def toggle_reports_callback(
     chat_id = int(callback.data.split(":")[1])
     user_id = callback.from_user.id
 
+    # Check that user is still an admin in this chat
+    try:
+        admin_ids = await _get_admins(bot, chat_id)
+        if user_id not in admin_ids:
+            await callback.answer("Ви більше не адмін цього чату.", show_alert=True)
+            return
+    except Exception as e:
+        logger.error(f"Cannot check admin status in {chat_id}: {e}")
+        await callback.answer("Не вдалося перевірити права.", show_alert=True)
+        return
+
     # Read current status
     c = await db.cursor()
     await c.execute(
@@ -332,11 +361,7 @@ async def toggle_reports_callback(
         return
 
     new_status = 0 if row[0] == 1 else 1
-    await db.execute(
-        "UPDATE report_mutes SET status = ? WHERE admin_id = ? AND chat_id = ?",
-        (new_status, user_id, chat_id),
-    )
-    await db.commit()
+    await set_report_status(db, user_id, chat_id, new_status)
 
     keyboard = await _reports_keyboard(db, bot, user_id)
     try:

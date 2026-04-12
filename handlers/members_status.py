@@ -6,6 +6,7 @@ from aiogram.types import ChatMemberUpdated
 from aiogram.enums import ChatMemberStatus
 import filters as fl
 import root
+from handlers.reports import set_report_status
 
 status_members = Router()
 logger = logging.getLogger(__name__)
@@ -23,8 +24,10 @@ async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
     if c_id in fl.ADMINS_CACHE:
         if new_status in admin_statuses:
             fl.ADMINS_CACHE[c_id].add(user_id)
+            await set_report_status(db, user_id, c_id, 1)
         elif old_status in admin_statuses:
             fl.ADMINS_CACHE[c_id].discard(user_id)
+            await set_report_status(db, user_id, c_id, 0)
 
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
 
