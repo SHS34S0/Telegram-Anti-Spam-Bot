@@ -13,6 +13,7 @@ from aiogram.types import (
     Message,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from utils import send_timed_msg
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,15 @@ async def _get_active_recipients(db: aiosqlite.Connection, chat_id: int) -> list
     return [row[0] for row in rows]
 
 
+async def _get_user_name(bot: Bot, chat_id: int, user_id: int) -> str:
+    """Return user's full name for public notices. Falls back to ID if unavailable."""
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        return member.user.full_name
+    except Exception:
+        return str(user_id)
+
+
 # ─── Report trigger handler ──────────────────────────────────────
 
 
@@ -209,8 +219,6 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
             # Admin hasn't started the bot — skip silently
             pass
 
-    from utils import send_timed_msg
-
     if sent_count == 0:
         asyncio.create_task(
             send_timed_msg(
@@ -267,17 +275,27 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
     actor = callback.from_user.full_name
 
     if action == "report_ban":
+        # Get name before banning — after ban get_chat_member may fail
+        user_name = await _get_user_name(bot, chat_id, user_id)
         try:
             await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
             logger.warning(
                 f"REPORT BAN: user {user_id} in {chat_id} by {callback.from_user.id}"
             )
             result_text = f"⛔️ Заблоковано. Дія: {actor}"
+            asyncio.create_task(
+                send_timed_msg(
+                    bot, chat_id,
+                    f"⛔️ Користувач {user_name} заблокований в чаті.",
+                    delay=60,
+                )
+            )
         except Exception as e:
             logger.error(f"Report ban failed: {e}")
             result_text = "❌ Не вдалося заблокувати."
 
     elif action == "report_mute":
+        user_name = await _get_user_name(bot, chat_id, user_id)
         try:
             await bot.restrict_chat_member(
                 chat_id=chat_id,
@@ -289,6 +307,13 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
                 f"REPORT MUTE: user {user_id} in {chat_id} by {callback.from_user.id}"
             )
             result_text = f"🔇 Замучено на 24г (дефолт). Дія: {actor}"
+            asyncio.create_task(
+                send_timed_msg(
+                    bot, chat_id,
+                    f"🔇 Користувач {user_name} обмежений у написанні на 24 години.",
+                    delay=60,
+                )
+            )
             # Show extend buttons so admin can escalate without extra steps
             extend_keyboard = _mute_extend_keyboard(chat_id, user_id)
             try:
@@ -346,11 +371,14 @@ async def report_mute_extend(callback: CallbackQuery, bot: Bot):
     actor = callback.from_user.full_name
 
     duration_map = {
-        "week": ("тиждень", 7 * 86400),
-        "month": ("місяць", 30 * 86400),
-        "forever": ("назавжди", 0),  # 0 = permanent in Telegram API
+        # label for admin DM, public notice text, seconds (0 = permanent)
+        "week":    ("тиждень",  "7 днів",       7 * 86400),
+        "month":   ("місяць",   "30 днів",      30 * 86400),
+        "forever": ("назавжди", "безстроково",  0),
     }
-    label, seconds = duration_map[duration]
+    label, public_label, seconds = duration_map[duration]
+
+    user_name = await _get_user_name(bot, chat_id, user_id)
 
     try:
         kwargs = dict(
@@ -365,6 +393,13 @@ async def report_mute_extend(callback: CallbackQuery, bot: Bot):
             f"REPORT MUTE EXT ({label}): user {user_id} in {chat_id} by {callback.from_user.id}"
         )
         result_text = f"🔇 Мут продовжено на {label}. Дія: {actor}"
+        asyncio.create_task(
+            send_timed_msg(
+                bot, chat_id,
+                f"🔇 Користувач {user_name} обмежений у написанні {public_label}.",
+                delay=60,
+            )
+        )
     except Exception as e:
         logger.error(f"Report mute extend failed: {e}")
         result_text = "❌ Не вдалося продовжити мут."
