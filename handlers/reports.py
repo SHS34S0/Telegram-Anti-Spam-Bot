@@ -132,6 +132,18 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
         return
 
     chat_id = message.chat.id
+
+    # Get admins early — needed to ignore reports on admins
+    try:
+        admin_ids = await _get_admins(bot, chat_id)
+    except Exception as e:
+        logger.error(f"Cannot get admins for {chat_id}: {e}")
+        return
+
+    if reported_user.id in admin_ids:
+        # Silently ignore reports on admins
+        return
+
     chat_name = message.chat.title or str(chat_id)
     user_id = reported_user.id
     user_name = reported_user.full_name
@@ -155,13 +167,6 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
     )
 
     keyboard = _report_keyboard(chat_id, user_id)
-
-    # Get admins from cache (API call only on first report for this chat)
-    try:
-        admin_ids = await _get_admins(bot, chat_id)
-    except Exception as e:
-        logger.error(f"Cannot get admins for {chat_id}: {e}")
-        return
 
     # Register admins in DB (INSERT OR IGNORE — existing records untouched)
     await _register_admins(db, admin_ids, chat_id)
@@ -213,7 +218,7 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
 @report_router.callback_query(
     F.data.startswith(("report_ban:", "report_mute:", "report_ignore:"))
 )
-async def report_action(callback: CallbackQuery, bot: Bot):
+async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connection):
     parts = callback.data.split(":")
     action = parts[0]
     chat_id = int(parts[1])
@@ -223,6 +228,12 @@ async def report_action(callback: CallbackQuery, bot: Bot):
     try:
         admin_ids = await _get_admins(bot, chat_id)
         if callback.from_user.id not in admin_ids:
+            # Delete record entirely — same cleanup as members_status demotion path
+            await db.execute(
+                "DELETE FROM report_mutes WHERE admin_id = ? AND chat_id = ?",
+                (callback.from_user.id, chat_id),
+            )
+            await db.commit()
             await callback.answer(
                 "Тільки адміни чату можуть це зробити.", show_alert=True
             )

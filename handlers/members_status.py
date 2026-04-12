@@ -27,7 +27,14 @@ async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
             await set_report_status(db, user_id, c_id, 1)
         elif old_status in admin_statuses:
             fl.ADMINS_CACHE[c_id].discard(user_id)
-            await set_report_status(db, user_id, c_id, 0)
+
+    # Always delete from report_mutes on demotion — works even after bot restart
+    if old_status in admin_statuses and new_status not in admin_statuses:
+        await db.execute(
+            "DELETE FROM report_mutes WHERE admin_id = ? AND chat_id = ?",
+            (user_id, c_id),
+        )
+        await db.commit()
 
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
 
