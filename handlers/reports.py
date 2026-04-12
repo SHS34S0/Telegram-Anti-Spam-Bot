@@ -280,7 +280,8 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
         try:
             await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
             logger.warning(
-                f"REPORT BAN: user {user_id} in {chat_id} by {callback.from_user.id}"
+                f"REPORT BAN: user {user_id} ({user_name}) in chat {chat_id} "
+                f"by admin {callback.from_user.id} ({actor})"
             )
             result_text = f"⛔️ Заблоковано. Дія: {actor}"
             asyncio.create_task(
@@ -304,7 +305,8 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
                 until_date=int(time.time()) + 86400,
             )
             logger.warning(
-                f"REPORT MUTE: user {user_id} in {chat_id} by {callback.from_user.id}"
+                f"REPORT MUTE 24h: user {user_id} ({user_name}) in chat {chat_id} "
+                f"by admin {callback.from_user.id} ({actor})"
             )
             result_text = f"🔇 Замучено на 24г (дефолт). Дія: {actor}"
             asyncio.create_task(
@@ -390,7 +392,8 @@ async def report_mute_extend(callback: CallbackQuery, bot: Bot):
             kwargs["until_date"] = int(time.time()) + seconds
         await bot.restrict_chat_member(**kwargs)
         logger.warning(
-            f"REPORT MUTE EXT ({label}): user {user_id} in {chat_id} by {callback.from_user.id}"
+            f"REPORT MUTE EXT ({label}): user {user_id} ({user_name}) in chat {chat_id} "
+            f"by admin {callback.from_user.id} ({actor})"
         )
         result_text = f"🔇 Мут продовжено на {label}. Дія: {actor}"
         asyncio.create_task(
@@ -513,6 +516,12 @@ async def toggle_reports_callback(
 
     new_status = 0 if row[0] == 1 else 1
     await set_report_status(db, user_id, chat_id, new_status)
+
+    status_label = "ON" if new_status == 1 else "OFF"
+    admin_name = callback.from_user.full_name
+    logger.info(
+        f"REPORT NOTIFY {status_label}: admin {user_id} ({admin_name}) in chat {chat_id}"
+    )
 
     keyboard = await _reports_keyboard(db, bot, user_id)
     try:
