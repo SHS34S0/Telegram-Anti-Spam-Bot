@@ -352,6 +352,17 @@ async def toggle_reports_callback(
     try:
         admin_ids = await _get_admins(bot, chat_id)
         if user_id not in admin_ids:
+            # Delete stale record and refresh keyboard so the button disappears
+            await db.execute(
+                "DELETE FROM report_mutes WHERE admin_id = ? AND chat_id = ?",
+                (user_id, chat_id),
+            )
+            await db.commit()
+            keyboard = await _reports_keyboard(db, bot, user_id)
+            try:
+                await callback.message.edit_reply_markup(reply_markup=keyboard)
+            except Exception:
+                pass
             await callback.answer("Ви більше не адмін цього чату.", show_alert=True)
             return
     except Exception as e:
