@@ -90,7 +90,9 @@ async def _register_admins(db: aiosqlite.Connection, admin_ids: set[int], chat_i
     await db.commit()
 
 
-async def set_report_status(db: aiosqlite.Connection, admin_id: int, chat_id: int, status: int):
+async def set_report_status(
+    db: aiosqlite.Connection, admin_id: int, chat_id: int, status: int
+):
     """Set report notification status for an admin in a chat (0=off, 1=on)."""
     await db.execute(
         "UPDATE report_mutes SET status = ? WHERE admin_id = ? AND chat_id = ?",
@@ -101,12 +103,11 @@ async def set_report_status(db: aiosqlite.Connection, admin_id: int, chat_id: in
 
 async def _get_active_recipients(db: aiosqlite.Connection, chat_id: int) -> list[int]:
     """Return admin_ids who have status=1 (want to receive reports) for this chat."""
-    c = await db.cursor()
-    await c.execute(
+    async with db.execute(
         "SELECT admin_id FROM report_mutes WHERE chat_id = ? AND status = 1",
         (chat_id,),
-    )
-    rows = await c.fetchall()
+    ) as cursor:
+        rows = await cursor.fetchall()
     return [row[0] for row in rows]
 
 
@@ -291,12 +292,11 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
 
 async def _reports_keyboard(db: aiosqlite.Connection, bot: Bot, user_id: int):
     """Build keyboard from chats where this user is already registered in report_mutes."""
-    c = await db.cursor()
-    await c.execute(
+    async with db.execute(
         "SELECT chat_id, status FROM report_mutes WHERE admin_id = ?",
         (user_id,),
-    )
-    rows = await c.fetchall()
+    ) as cursor:
+        rows = await cursor.fetchall()
 
     if not rows:
         return None
@@ -371,12 +371,11 @@ async def toggle_reports_callback(
         return
 
     # Read current status
-    c = await db.cursor()
-    await c.execute(
+    async with db.execute(
         "SELECT status FROM report_mutes WHERE admin_id = ? AND chat_id = ?",
         (user_id, chat_id),
-    )
-    row = await c.fetchone()
+    ) as cursor:
+        row = await cursor.fetchone()
 
     if not row:
         await callback.answer("Запис не знайдено.", show_alert=True)
