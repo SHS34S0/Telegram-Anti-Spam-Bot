@@ -271,33 +271,6 @@ async def check_user_bio(bot, user_id):
     return False  # Все чисто
 
 
-# потрібно переробити на зняття мут чи блоку але без видалення з спільноти якщо мут
-async def mass_blocking(bot, db, user_id, ignore_chat_id):
-    try:
-        async with db.execute(
-            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
-            (ignore_chat_id,),
-        ) as cursor:
-            all_chats = await cursor.fetchall()
-
-        if not all_chats:
-            return
-
-        print(f"Починаю мас-бан юзера {user_id} у {len(all_chats)} чатах...")
-        for row in all_chats:
-            await asyncio.sleep(0.9)
-            target_chat_id = row[
-                0
-            ]  # Результат це список кортежів [(123,), (456,)], беремо [0]
-            try:
-                await bot.ban_chat_member(chat_id=target_chat_id, user_id=user_id)
-                print(f"Забанено в чаті {target_chat_id}")
-            except Exception as e:
-                print(f"Не вдалось забанити в {target_chat_id}: {e}")
-    except Exception as e:
-        print(f"Помилка в mass_blocking: {e}")
-
-
 def rus_language(text):
     for i in text.lower():
         if i in ["ы", "э", "ъ", "ё"]:

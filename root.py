@@ -49,6 +49,7 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
         for row in all_chats:
             await asyncio.sleep(0.9)
             target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
+            dead_chat_reason = None  # set if chat is gone or bot was kicked
 
             # Step 1: try to unmute (restore permissions). Fails if user is banned — that's ok.
             try:
@@ -60,6 +61,8 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                 print(f"Розмучено в чаті {target_chat_id}")
             except Exception as e:
                 print(f"restrict не вдалось {target_chat_id}: {e}")
+                if "chat not found" in str(e) or "bot was kicked" in str(e):
+                    dead_chat_reason = str(e)
 
             # Step 2: unban only if actually banned (safe for non-banned users)
             try:
@@ -71,9 +74,45 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                 print(f"Розбанено в чаті {target_chat_id}")
             except Exception as e:
                 print(f"unban не вдалось {target_chat_id}: {e}")
+                if dead_chat_reason is None and ("chat not found" in str(e) or "bot was kicked" in str(e)):
+                    dead_chat_reason = str(e)
+
+            # Remove chat from DB if it no longer exists or bot was kicked
+            if dead_chat_reason:
+                await db.execute("DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,))
+                await db.commit()
+                print(f"Видалено чат {target_chat_id} з бази: {dead_chat_reason}")
 
     except Exception as e:
         print(f"Помилка при розблокуванні: {e}")
+
+
+async def mass_blocking(bot, db, user_id, ignore_chat_id):
+    try:
+        async with db.execute(
+            "SELECT chat_id FROM chat_links WHERE chat_id != ? AND chat_id LIKE '-100%'",
+            (ignore_chat_id,),
+        ) as cursor:
+            all_chats = await cursor.fetchall()
+
+        if not all_chats:
+            return
+
+        print(f"Починаю мас-бан юзера {user_id} у {len(all_chats)} чатах...")
+        for row in all_chats:
+            await asyncio.sleep(0.9)
+            target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
+            try:
+                await bot.ban_chat_member(chat_id=target_chat_id, user_id=user_id)
+                print(f"Забанено в чаті {target_chat_id}")
+            except Exception as e:
+                print(f"Не вдалось забанити в {target_chat_id}: {e}")
+                if "chat not found" in str(e) or "bot was kicked" in str(e):
+                    await db.execute("DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,))
+                    await db.commit()
+                    print(f"Видалено чат {target_chat_id} з бази: {str(e)}")
+    except Exception as e:
+        print(f"Помилка в mass_blocking: {e}")
 
 
 def _get_phash_str(bio):
@@ -195,7 +234,7 @@ async def root_info(message: Message, bot: Bot, db):
         chat_name = message.chat.title or "Особисті повідомлення"
         if message.text and message.text.isdigit():
             fl.GLOBAL_BANNED.add(int(message.text))
-            await fl.mass_blocking(bot, db, int(message.text), 111)
+            await mass_blocking(bot, db, int(message.text), 111)
 
             await user_info(
                 bot,
