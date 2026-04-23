@@ -69,16 +69,16 @@ def _mute_extend_keyboard(chat_id: int, user_id: int):
     return builder.as_markup()
 
 
-def _report_keyboard(chat_id: int, user_id: int):
+def _report_keyboard(chat_id: int, user_id: int, message_id: int):
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
             text="⛔️ Бан",
-            callback_data=f"report_ban:{chat_id}:{user_id}",
+            callback_data=f"report_ban:{chat_id}:{user_id}:{message_id}",
         ),
         InlineKeyboardButton(
             text="🔇 Мут",
-            callback_data=f"report_mute:{chat_id}:{user_id}",
+            callback_data=f"report_mute:{chat_id}:{user_id}:{message_id}",
         ),
         InlineKeyboardButton(
             text="✅ Ігнор",
@@ -155,8 +155,8 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
     # Delete the report command so it doesn't clutter the chat
     try:
         await message.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Cannot delete report command in {message.chat.id}: {e}")
 
     if not reported_user or reported_user.is_bot:
         # Silently ignore reports on bots or anonymous messages
@@ -197,7 +197,7 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
         f"{link_line}"
     )
 
-    keyboard = _report_keyboard(chat_id, user_id)
+    keyboard = _report_keyboard(chat_id, user_id, msg_id)
 
     # Register admins in DB (INSERT OR IGNORE — existing records untouched)
     await _register_admins(db, admin_ids, chat_id)
@@ -215,9 +215,8 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
                 disable_web_page_preview=True,
             )
             sent_count += 1
-        except Exception:
-            # Admin hasn't started the bot — skip silently
-            pass
+        except Exception as e:
+            logger.warning(f"Cannot send report to admin {admin_id}: {e}")
 
     if sent_count == 0:
         asyncio.create_task(
@@ -252,6 +251,7 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
     action = parts[0]
     chat_id = int(parts[1])
     user_id = int(parts[2])
+    message_id = int(parts[3]) if len(parts) > 3 else None
 
     # Check admin rights via cache; fall back to API if cache is empty
     try:
@@ -283,6 +283,11 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
                 f"REPORT BAN: user {user_id} ({user_name}) in chat {chat_id} "
                 f"by admin {callback.from_user.id} ({actor})"
             )
+            if message_id:
+                try:
+                    await bot.delete_message(chat_id=chat_id, message_id=message_id)
+                except Exception as e:
+                    logger.warning(f"Cannot delete reported message {message_id} in {chat_id}: {e}")
             result_text = f"⛔️ Заблоковано. Дія: {actor}"
             asyncio.create_task(
                 send_timed_msg(
@@ -308,6 +313,11 @@ async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connect
                 f"REPORT MUTE 24h: user {user_id} ({user_name}) in chat {chat_id} "
                 f"by admin {callback.from_user.id} ({actor})"
             )
+            if message_id:
+                try:
+                    await bot.delete_message(chat_id=chat_id, message_id=message_id)
+                except Exception as e:
+                    logger.warning(f"Cannot delete reported message {message_id} in {chat_id}: {e}")
             result_text = f"🔇 Замучено на 24г (дефолт). Дія: {actor}"
             asyncio.create_task(
                 send_timed_msg(
@@ -440,7 +450,8 @@ async def _reports_keyboard(db: aiosqlite.Connection, bot: Bot, user_id: int):
         try:
             chat = await bot.get_chat(chat_id)
             name = chat.title or str(chat_id)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Cannot get chat {chat_id} for reports keyboard: {e}")
             name = str(chat_id)
         builder.button(
             text=f"{icon} {name}",
@@ -494,8 +505,8 @@ async def toggle_reports_callback(
             keyboard = await _reports_keyboard(db, bot, user_id)
             try:
                 await callback.message.edit_reply_markup(reply_markup=keyboard)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Cannot edit reply markup after demotion check in {chat_id}: {e}")
             await callback.answer("Ви більше не адмін цього чату.", show_alert=True)
             return
     except Exception as e:
@@ -526,8 +537,8 @@ async def toggle_reports_callback(
     keyboard = await _reports_keyboard(db, bot, user_id)
     try:
         await callback.message.edit_reply_markup(reply_markup=keyboard)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Cannot edit reports toggle keyboard for admin {user_id}: {e}")
 
     status_text = "увімкнено 🔔" if new_status == 1 else "вимкнено 🔕"
     await callback.answer(f"Репорти для цього чату {status_text}")
