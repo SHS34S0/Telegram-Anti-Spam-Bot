@@ -3,6 +3,7 @@ import time
 import logging
 import filters as fl
 import config
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import (
     ChatPermissions,
 )
@@ -24,6 +25,11 @@ async def safe_delete(message):
                 config.root,
                 "DELETE MESSAGE",
             )
+    except TelegramBadRequest as e:
+        # Message was already deleted by admin or expired — not a real error
+        logger.warning(
+            f"Message already gone, skipping delete: {e}"
+        )
     except Exception as e:
         logger.error(
             f"помилка {e} при видаленні повідомлення від {message.from_user.first_name} {message.from_user.username} {message.from_user.id}"
@@ -34,7 +40,6 @@ async def safe_delete(message):
             config.root,
             "Помилка при видаленні повідомлення",
         )
-        pass
 
 
 async def safe_ban(message, u_id, sec=0):
