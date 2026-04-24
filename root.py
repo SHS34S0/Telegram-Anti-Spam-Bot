@@ -130,14 +130,14 @@ async def user_info(
 ):
     photos = await bot.get_user_profile_photos(u_id, limit=1)
 
-    # Якщо фото немає — відправляємо текст і одразу виходимо (return)
-    # з часом потрібно преевірити чи є це проблема не додати в чорний список підозрюваного без фото
     if not photos.total_count:
         await bot.send_message(
             chat_id=str(config.root),
             text=f"⚠️ <a href='tg://user?id={u_id}'>{user_full_name}</a>\nФільтр: {text}\n(Фото профілю відсутнє)",
             parse_mode="HTML",
+            reply_markup=moder_menu(u_id),
         )
+        fl.SUSPICIOUS_USERS.add(u_id)
         return
 
     # Якщо фото є, йдемо далі без зайвих відступів
@@ -194,6 +194,7 @@ async def user_info(
             chat_id=str(config.root),
             text=f"🚫 <a href='tg://user?id={u_id}'>{user_full_name}</a> — авто-бан (повторне спрацювання)",
             parse_mode="HTML",
+            reply_markup=moder_menu(u_id, photo_phash),
         )
         return
 
@@ -209,20 +210,28 @@ async def user_info(
     )
 
 
-def moder_menu(user_id, photo_hash):
+def moder_menu(user_id, photo_hash=None):
     builder = InlineKeyboardBuilder()
 
     builder.add(
         InlineKeyboardButton(
             text="Bot", callback_data=f"black_list:{user_id}", style="danger"
-        ),
-        InlineKeyboardButton(
-            text=f"📷 Додати фото", callback_data=f"add_photo:{user_id}:{photo_hash}"
-        ),
+        )
+    )
+
+    if photo_hash is not None:
+        builder.add(
+            InlineKeyboardButton(
+                text=f"📷 Додати фото",
+                callback_data=f"add_photo:{user_id}:{photo_hash}",
+            )
+        )
+    builder.add(
         InlineKeyboardButton(
             text="Human", callback_data=f"unblock:{user_id}", style="success"
-        ),
+        )
     )
+
     builder.adjust(3)
     return builder.as_markup()  # Повертаємо готовий результат
 
