@@ -1,9 +1,12 @@
+black
+aiohttp
+aiogram
+pytest
+pytest-asyncio
+requests
 nudenet
 aiosqlite
-aiogram
 async-lru
-pytest
 ImageHash
 Pillow
 httpx
-aiohttp
