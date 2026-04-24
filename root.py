@@ -74,12 +74,16 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                 print(f"Розбанено в чаті {target_chat_id}")
             except Exception as e:
                 print(f"unban не вдалось {target_chat_id}: {e}")
-                if dead_chat_reason is None and ("chat not found" in str(e) or "bot was kicked" in str(e)):
+                if dead_chat_reason is None and (
+                    "chat not found" in str(e) or "bot was kicked" in str(e)
+                ):
                     dead_chat_reason = str(e)
 
             # Remove chat from DB if it no longer exists or bot was kicked
             if dead_chat_reason:
-                await db.execute("DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,))
+                await db.execute(
+                    "DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,)
+                )
                 await db.commit()
                 print(f"Видалено чат {target_chat_id} з бази: {dead_chat_reason}")
 
@@ -108,7 +112,9 @@ async def mass_blocking(bot, db, user_id, ignore_chat_id):
             except Exception as e:
                 print(f"Не вдалось забанити в {target_chat_id}: {e}")
                 if "chat not found" in str(e) or "bot was kicked" in str(e):
-                    await db.execute("DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,))
+                    await db.execute(
+                        "DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,)
+                    )
                     await db.commit()
                     print(f"Видалено чат {target_chat_id} з бази: {str(e)}")
     except Exception as e:
@@ -289,17 +295,18 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
         fl.GLOBAL_BANNED.add(int(value))
         # status 1 is ban
         await fl.change_user_status(db, int(value), 1)
-        await callback.message.answer(f"Додано в чорний список")
+        await callback.answer(f"✅ Додано в чорний список", show_alert=True)
     elif result.startswith("unblock"):
-        await callback.message.answer(f"Відправляю запит зняття обмежень")
         # на випадок коли не вручну банив і ід нема в чорному списку
         if int(value) in fl.GLOBAL_BANNED:
             fl.GLOBAL_BANNED.discard(int(value))
         if int(value) in fl.SUSPICIOUS_USERS:
             fl.SUSPICIOUS_USERS.discard(int(value))  # type: ignore[attr-defined]
         # status 0 is unban
+        await callback.answer(f"Відправляю запит зняття обмежень", show_alert=True)
         await fl.change_user_status(db, int(value), 0)
         await mass_unban(bot, db, int(value), 111)
+
     elif result.startswith("add_photo"):
         parts = list_data.split(":")
         user_to_clear = int(parts[1])
