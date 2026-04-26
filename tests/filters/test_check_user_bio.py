@@ -27,14 +27,18 @@ async def test_check_user_bio_invite_link():
 
 
 @pytest.mark.asyncio
-async def test_check_user_bio_stop_words():
+@pytest.mark.parametrize(
+    "bio, expected",
+    [
+        ("Лучший прогноз смотри в сторисе", 100),
+        ("💙 Переходь у мій секретний блог з відвертими фото - @...", 100),
+    ],
+)
+async def test_check_user_bio_stop_words(bio, expected):
     mock_bot = MagicMock()
-    mock_bot.get_chat = AsyncMock(
-        return_value=MagicMock(bio="Лучший прогноз смотри в сторисе")
-    )
+    mock_bot.get_chat = AsyncMock(return_value=MagicMock(bio=bio))
     result = await check_user_bio(mock_bot, user_id=123)
-    assert result == 100
-    mock_bot.get_chat.assert_called_once_with(123)
+    assert result == expected
 
 
 @pytest.mark.asyncio
