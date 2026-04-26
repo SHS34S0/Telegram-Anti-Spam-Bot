@@ -2,34 +2,35 @@ import pytest
 from filters import check_card
 
 
-def test_is_card():
-    assert check_card("5488 5500 4199 3308") == True
-    assert check_card("5488550041993308") == True
-    assert check_card("5488-5500-4199-3308") == True
-    assert check_card("5488.5500.4199.3308") == True
-    assert check_card("5488?5500?4199?3308") == True
-    assert check_card("5488,5500,4199,3308") == True
-    assert check_card("54 88 55 00 41 99 33 08") == True
-    assert check_card("54-88-55-00-41,99.33/08") == True
-    assert check_card("5 4 8 8 5 5 0 0 4 1 9 9 3 3 0 8") == True
-    assert check_card("5.4-8/8*5 5 0 0 4 1 9 9 3 3 0 8") == True
-    assert check_card("Збір4441111013726595") == True
-    assert check_card("Збір44 411110 13726 595") == True
-    assert check_card("Збір44 411110 13726 595коштів") == True
-    assert check_card("Збір 44 411110 13726 595 коштів") == True
-    #
-    assert check_card("Збір 44 411110 13726 59 коштів") == False
-    assert check_card("44 411110 13726 59 коштів") == False
-    assert check_card("444111101372659 коштів") == False
-    assert (
-            check_card(
-                "Рейс 341 відправляється о 12:30, зупинки о 14:45 і 16:20, прибуття о 18:55"
-            )
-            == False
-    )
-    assert (
-            check_card(
-                "Ціни: товар 1 — 120 грн, товар 2 — 340 грн, товар 3 — 560 грн, разом 1020 грн"
-            )
-            == False
-    )
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("5488 5500 4199 3308", True),
+        ("5488550041993308", True),
+        ("5488-5500-4199-3308", True),
+        ("5488.5500.4199.3308", True),
+        ("5488?5500?4199?3308", True),
+        ("5488,5500,4199,3308", True),
+        ("54 88 55 00 41 99 33 08", True),
+        ("54-88-55-00-41,99.33/08", True),
+        ("5 4 8 8 5 5 0 0 4 1 9 9 3 3 0 8", True),
+        ("5.4-8/8*5 5 0 0 4 1 9 9 3 3 0 8", True),
+        ("Збір4441111013726595", True),
+        ("Збір44 411110 13726 595", True),
+        ("Збір44 411110 13726 595коштів", True),
+        ("Збір 44 411110 13726 595 коштів", True),
+        ("Збір 44 411110 13726 59 коштів", False),
+        ("44 411110 13726 59 коштів", False),
+        ("444111101372659 коштів", False),
+        (
+            "Рейс 341 відправляється о 12:30, зупинки о 14:45 і 16:20, прибуття о 18:55",
+            False,
+        ),
+        (
+            "Ціни: товар 1 — 120 грн, товар 2 — 340 грн, товар 3 — 560 грн, разом 1020 грн",
+            False,
+        ),
+    ],
+)
+def test_check_card(text, expected):
+    assert check_card(text) == expected

@@ -2,53 +2,54 @@ import pytest
 from filters import rus_language
 
 
-def test_rus_language():
-    assert rus_language("То були мы разом") == True
-    assert rus_language("этот или тот") == True
-    assert rus_language("ъ") == True
-    assert rus_language("ё") == True
-    assert rus_language("э") == True
-    assert rus_language("ы") == True
-    assert rus_language("моё или твоё") == True
-    assert rus_language("потому что") == True
-    assert rus_language("как то так") == True
-    assert rus_language("да или нет") == True
-    assert rus_language("почему") == True
-    assert rus_language("вот как то так") == True
-    assert rus_language("только сегодня") == True
-    assert rus_language("только здесь") == True
-    assert rus_language("только сейчас") == True
-    assert rus_language("я теперь счастлив") == True
-    assert rus_language("ти никогда не пил кофе") == True
-    assert rus_language("Я очень люблю кофе") == True
-    assert rus_language("когда я пью кофе") == True
-    assert rus_language("мі там где хорошо") == True
-    assert rus_language("да нет") == True
-    assert rus_language("я конечно тут") == True
-    assert rus_language("наверное") == True
-    assert rus_language("дайте пожалуйста") == True
-    assert rus_language("скажу вам спасибо") == True
-    assert rus_language("я человек") == True
-    assert rus_language("жизнь") == True
-    assert rus_language("такой") == True
-    assert rus_language("могу") == True
-    assert rus_language("понимаю") == True
-    assert rus_language("должен") == True
-    assert rus_language("нужен") == True
-    assert rus_language("говоря") == True
-    assert rus_language("личку") == True
-    assert rus_language("работа") == True
-    assert rus_language("нужен") == True
-    assert rus_language("каждую") == True
-
-    assert rus_language("Паляниця") == False
-    assert rus_language("Укрзалізниця") == False
-    assert rus_language("привіт") == False
-    assert (
-            rus_language(
-                "Привіт усім! Підкажіть, будь ласка, як краще налаштувати aiogram для роботи з базою даних? Буду вдячний за допомогу."
-            )
-            == False
-    )
-
-    assert rus_language("🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥") == False
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("То були мы разом", True),
+        ("этот или тот", True),
+        ("ъ", True),
+        ("ё", True),
+        ("э", True),
+        ("ы", True),
+        ("моё или твоє", True),
+        ("потому что", True),
+        ("как то так", True),
+        ("да или нет", True),
+        ("почему", True),
+        ("вот как то так", True),
+        ("только сегодня", True),
+        ("только здесь", True),
+        ("только сейчас", True),
+        ("я теперь счастлив", True),
+        ("ти никогда не пил кофе", True),
+        ("Я очень люблю кофе", True),
+        ("когда я пью кофе", True),
+        ("мі там где хорошо", True),
+        ("да нет", True),
+        ("я конечно тут", True),
+        ("наверное", True),
+        ("дайте пожалуйста", True),
+        ("скажу вам спасибо", True),
+        ("я человек", True),
+        ("жизнь", True),
+        ("такой", True),
+        ("могу", True),
+        ("понимаю", True),
+        ("должен", True),
+        ("нужен", True),
+        ("говоря", True),
+        ("личку", True),
+        ("работа", True),
+        ("каждую", True),
+        ("Паляниця", False),
+        ("Укрзалізниця", False),
+        ("привіт", False),
+        (
+            "Привіт усім! Підкажіть, будь ласка, як краще налаштувати aiogram для роботи з базою даних? Буду вдячний за допомогу.",
+            False,
+        ),
+        ("🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥", False),
+    ],
+)
+def test_rus_language(text, expected):
+    assert rus_language(text) == expected
