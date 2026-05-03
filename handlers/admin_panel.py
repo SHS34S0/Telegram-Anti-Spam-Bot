@@ -122,12 +122,9 @@ async def on_off_buttons(db, bot, chat_ids, feature):
             )
         except (TelegramForbiddenError, TelegramBadRequest) as e:
             logger.error(f"Видаляємо з бази канал {e}")
-            # Видаляємо з бази
             c = await db.cursor()
-            await c.execute(
-                "DELETE FROM chat_links WHERE chat_id = ?",
-                (id,),
-            )
+            await c.execute("DELETE FROM chat_links WHERE chat_id = ?", (id,))
+            await c.execute("DELETE FROM admins WHERE chat_id = ?", (id,))
             await db.commit()
             continue
         except Exception as e:
@@ -153,14 +150,12 @@ async def add_admin(db, bot, chat_ids):
         except (TelegramForbiddenError, TelegramBadRequest) as e:
             logger.error(f"Видаляємо з бази канал {e}")
             c = await db.cursor()
-            await c.execute(
-                "DELETE FROM chat_links WHERE chat_id = ?",
-                (id,),
-            )
+            await c.execute("DELETE FROM chat_links WHERE chat_id = ?", (id,))
+            await c.execute("DELETE FROM admins WHERE chat_id = ?", (id,))
             await db.commit()
             continue
         except Exception as e:
-            print(f"Щось інше {e}")
+            logger.error(f"Щось інше {e}")
             continue
     builder.add(
         InlineKeyboardButton(text="Назад", callback_data="my_settings"),
@@ -197,8 +192,8 @@ async def admin_list(db, bot, chat_id):
             )
     except Exception as e:
         logger.error(f"Видаляємо з бази канал {e}")
-        # якщо бот не адмін або його видалили  чистимо базу
         await db.execute("DELETE FROM chat_links WHERE chat_id = ?", (chat_id,))
+        await db.execute("DELETE FROM admins WHERE chat_id = ?", (chat_id,))
         await db.commit()
 
     builder.add(
