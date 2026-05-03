@@ -231,8 +231,11 @@ def moder_menu(user_id, photo_hash=None):
             text="Human", callback_data=f"unblock:{user_id}", style="success"
         )
     )
+    builder.add(
+        InlineKeyboardButton(text="Skip", callback_data=f"skip_suspect:{user_id}")
+    )
 
-    builder.adjust(3)
+    builder.adjust(3, 1)
     return builder.as_markup()  # Повертаємо готовий результат
 
 
@@ -293,6 +296,7 @@ async def root_info(message: Message, bot: Bot, db):
             "black_list:",
             "unblock:",
             "add_photo:",
+            "skip_suspect:",
         )
     )
 )
@@ -305,16 +309,18 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
         # status 1 is ban
         await fl.change_user_status(db, int(value), 1)
         await callback.answer(f"✅ Додано в чорний список", show_alert=True)
-    elif result.startswith("unblock"):
-        # на випадок коли не вручну банив і ід нема в чорному списку
-        if int(value) in fl.GLOBAL_BANNED:
-            fl.GLOBAL_BANNED.discard(int(value))
-        if int(value) in fl.SUSPICIOUS_USERS:
-            fl.SUSPICIOUS_USERS.discard(int(value))  # type: ignore[attr-defined]
-        # status 0 is unban
-        await callback.answer(f"Відправляю запит зняття обмежень", show_alert=True)
+    elif result in ("unblock", "skip_suspect"):
+        fl.GLOBAL_BANNED.discard(int(value))
+        fl.SUSPICIOUS_USERS.discard(int(value))  # type: ignore[attr-defined]
         await fl.change_user_status(db, int(value), 0)
-        await mass_unban(bot, db, int(value), 111)
+        if result == "unblock":
+            await callback.answer("Відправляю запит зняття обмежень", show_alert=True)
+            await mass_unban(bot, db, int(value), 111)
+        else:
+            await callback.answer(
+                "✅ Юзера прибрано зі списку підозрюваних та чорного списку",
+                show_alert=True,
+            )
 
     elif result.startswith("add_photo"):
         parts = list_data.split(":")
