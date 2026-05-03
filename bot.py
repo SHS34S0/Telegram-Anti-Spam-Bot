@@ -10,7 +10,7 @@ from aiogram.types import (
     Message,
 )
 import filters as fl
-import root
+from handlers import root
 from handlers.admin_panel import admin_router
 from handlers.members_status import status_members
 from handlers.reaction import message_reaction

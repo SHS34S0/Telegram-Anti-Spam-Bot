@@ -1,11 +1,10 @@
 import logging
-from curses.ascii import isdigit
 
 from aiogram import Router, Bot
 from aiogram.types import ChatMemberUpdated
 from aiogram.enums import ChatMemberStatus
 import filters as fl
-import root
+from handlers import root
 from handlers.reports import set_report_status
 
 status_members = Router()
