@@ -388,6 +388,7 @@ async def main() -> None:
                 await db.commit()
         await fl.load_hashes(db)
         await fl.load_banned_users(db)
+        await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(
             bot,
             db=db,
