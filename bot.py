@@ -85,7 +85,6 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     if settings:
         (
             owner_id,
-            voting_buttons,
             rus_language,
             stop_word,
             stop_channel,

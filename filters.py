@@ -149,7 +149,7 @@ async def register_or_update_passport(db, user_id, full_name, username):
 async def get_chat_settings(db, c_id):  # перевірка хто є канал чату (повертаємо id)
     c = await db.cursor()
     await c.execute(
-        "SELECT owner_id, voting_buttons, rus_language, stop_word, stop_channel, stop_links, card_number, emoji_checker, reaction_spam FROM chat_links WHERE chat_id = ?",
+        "SELECT owner_id, rus_language, stop_word, stop_channel, stop_links, card_number, emoji_checker, reaction_spam FROM chat_links WHERE chat_id = ?",
         (c_id,),
     )
     respond = await c.fetchone()
@@ -175,25 +175,6 @@ async def msg_count(db, user_id, channel_id):
     )
     result = await c.fetchone()  # Дістали результат
     return result is not None
-
-
-##########
-async def voting(db, m_id, voter_id):
-    try:  # Пробуємо додати запис про голос
-        await db.execute(
-            "INSERT INTO votes_log (voting_m_id, voter_id) VALUES (?, ?)",
-            (m_id, voter_id),
-        )  # UNIQUE SQL
-        await db.commit()  # Якщо ми тут юзер голосує вперше
-        return True
-    except aiosqlite.IntegrityError:  # якщо двічі голосуватиме
-        return False
-
-
-async def clear_voting(db, m_id):
-    await db.execute("DELETE FROM votings WHERE work_m_id = ?", (m_id,))
-    await db.execute("DELETE FROM votes_log WHERE voting_m_id = ?", (m_id,))
-    await db.commit()
 
 
 def emoji_checker(text):

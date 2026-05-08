@@ -30,17 +30,16 @@ CREATE TABLE "chat_stats"
 
 CREATE TABLE "chat_links"
 (
-    "chat_id"        INTEGER PRIMARY KEY,
-    "owner_id"       INTEGER,
-    "voting_buttons" INTEGER DEFAULT 0 CHECK ("voting_buttons" IN (0, 1)),
-    "rus_language"   INTEGER DEFAULT 0 CHECK ("rus_language" IN (0, 1)),
-    "stop_word"      INTEGER DEFAULT 0 CHECK ("stop_word" IN (0, 1)),
+    "chat_id"       INTEGER PRIMARY KEY,
+    "owner_id"      INTEGER,
+    "rus_language"  INTEGER DEFAULT 0 CHECK ("rus_language" IN (0, 1)),
+    "stop_word"     INTEGER DEFAULT 0 CHECK ("stop_word" IN (0, 1)),
 
-    "stop_channel"   INTEGER DEFAULT 1 CHECK ("stop_channel" IN (0, 1)),
-    "stop_links"     INTEGER DEFAULT 1 CHECK ("stop_links" IN (0, 1)),
-    "card_number"    INTEGER DEFAULT 1 CHECK ("card_number" IN (0, 1)),
-    "emoji_checker"  INTEGER DEFAULT 0 CHECK ("emoji_checker" IN (0, 1)),
-    "reaction_spam"  INTEGER DEFAULT 1 CHECK ("reaction_spam" IN (0, 1))
+    "stop_channel"  INTEGER DEFAULT 1 CHECK ("stop_channel" IN (0, 1)),
+    "stop_links"    INTEGER DEFAULT 1 CHECK ("stop_links" IN (0, 1)),
+    "card_number"   INTEGER DEFAULT 1 CHECK ("card_number" IN (0, 1)),
+    "emoji_checker" INTEGER DEFAULT 0 CHECK ("emoji_checker" IN (0, 1)),
+    "reaction_spam" INTEGER DEFAULT 1 CHECK ("reaction_spam" IN (0, 1))
 );
 
 CREATE TABLE "photo_hash"
@@ -56,24 +55,6 @@ CREATE TABLE "admins"
     "admin_id" INTEGER NOT NULL,
     "status"   INTEGER DEFAULT 0 CHECK ("status" IN (0, 1)),
     UNIQUE ("chat_id", "admin_id")
-);
-
-CREATE TABLE "votings"
-(
-    "chat_id"    INTEGER,
-    "message_id" INTEGER,
-    "user_id"    INTEGER,
-    "work_m_id"  INTEGER,
-    "bot"        INTEGER DEFAULT 0,
-    "human"      INTEGER DEFAULT 0,
-    UNIQUE ("chat_id", "message_id")
-);
-
-CREATE TABLE "votes_log"
-(
-    "voting_m_id" INTEGER, -- Message ID with buttons
-    "voter_id"    INTEGER, -- ID of the person who pressed the button
-    UNIQUE ("voting_m_id", "voter_id")
 );
 
 CREATE TABLE IF NOT EXISTS "report_mutes"
