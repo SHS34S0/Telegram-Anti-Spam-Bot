@@ -341,15 +341,22 @@ async def check_hash(bot, photo):
         await bot.download_file(file.file_path, photo_bytes)
         photo_bytes.seek(0)
 
-        # Запускаємо генерацію хешу БЕЗ блокування основного бота
         loop = asyncio.get_running_loop()
         new_hash = await loop.run_in_executor(None, _calculate_phash, photo_bytes)
 
-        # Шукаємо збіг
         for saved_hash in PHOTO_HASH.keys():
             if new_hash - saved_hash <= THRESHOLD:
                 logger.warning(f"HASH {saved_hash}")
-                return True  # БАН
+                db = await db_manager.get_db()
+                await db.execute(
+                    """
+                    INSERT INTO photo_hash (hash, last_seen) VALUES (?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(hash) DO UPDATE SET last_seen = CURRENT_TIMESTAMP
+                    """,
+                    (str(saved_hash),),
+                )
+                await db.commit()
+                return True
 
     except Exception as e:
         logger.error(f"Помилка перевірки хешу: {e}")

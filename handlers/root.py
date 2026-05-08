@@ -330,7 +330,10 @@ async def admin_settings(callback: CallbackQuery, bot: Bot):
         user_to_clear = int(parts[1])
         hash_value = parts[2]
         await db.execute(
-            "INSERT OR IGNORE INTO photo_hash (hash) VALUES (?)",
+            """
+            INSERT INTO photo_hash (hash, last_seen) VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT(hash) DO UPDATE SET last_seen = CURRENT_TIMESTAMP
+            """,
             (hash_value,),
         )
         await db.commit()
