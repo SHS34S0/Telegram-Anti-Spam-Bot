@@ -1,6 +1,7 @@
 import re
 import asyncio
 import os
+import uuid
 from nudenet import NudeDetector  # type: ignore[import-untyped]
 from async_lru import alru_cache
 import json
@@ -88,7 +89,7 @@ async def check_user_avatar(bot, user_id: int):
         _nude_semaphore = asyncio.Semaphore(2)
     semaphore = _nude_semaphore
 
-    file_path = f"temp_avatar_{user_id}.jpg"
+    file_path = f"temp_avatar_{user_id}_{uuid.uuid4().hex[:8]}.jpg"
 
     try:
         # взяти фото профілю
@@ -122,7 +123,7 @@ async def check_user_avatar(bot, user_id: int):
                 return 50  # МУТ
 
     except Exception as e:
-        logger.error(f"Помилка перевірки аватара {user_id}: {e}")
+        logger.warning(f"Помилка перевірки аватара {user_id}: {e}")
 
     finally:
         # видалення файлу
