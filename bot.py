@@ -19,6 +19,7 @@ from handlers.reports import report_router
 import logging
 import messages as msg
 import utils
+from database import db_manager
 
 # назва файлу створимо власний мікрофон
 logger = logging.getLogger(__name__)
@@ -53,7 +54,8 @@ dp.include_router(main_router)
 
 @main_router.message(F.chat.type.in_({"group", "supergroup"}))
 @main_router.edited_message(F.chat.type.in_({"group", "supergroup"}))
-async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> None:
+async def echo_handler(message: Message, bot: Bot) -> None:
+    db: aiosqlite.Connection = await db_manager.get_db()
     if message.from_user and message.from_user.id == 777000:
         return
     if message.new_chat_members or message.left_chat_member:
@@ -64,7 +66,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
     user_full_name = message.from_user.full_name
     c_id = message.chat.id
     chat_name = message.chat.title or "Особисті повідомлення"
-    settings = await fl.get_chat_settings(db, c_id)
+    settings = await fl.get_chat_settings(c_id)
     # caption is used when media has a text under it (photo, video, etc.)
     text = message.text or message.caption
     entities = message.entities or message.caption_entities
@@ -222,9 +224,9 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 
         ###################
         # Запис або оновлення паспорта
-        await fl.register_or_update_passport(db, u_id, user_full_name, username)
+        await fl.register_or_update_passport(u_id, user_full_name, username)
         # перевірка чи є в базі як підписник каналу ?
-        if not await fl.msg_count(db, u_id, c_id):
+        if not await fl.msg_count(u_id, c_id):
             await db.execute(
                 """
                 INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date)
@@ -235,14 +237,14 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                 (u_id, c_id),
             )
             await db.commit()
-            fl.msg_count.cache_invalidate(db, u_id, c_id)
+            fl.msg_count.cache_invalidate(u_id, c_id)
             dc_number = await fl.check_dc_number(bot, u_id)
             if dc_number == 100:
                 await utils.safe_delete(message)
                 await utils.safe_ban(message, u_id)
                 fl.GLOBAL_BANNED.add(int(u_id))
                 # status 1 is ban
-                await fl.change_user_status(db, int(u_id), 1)
+                await fl.change_user_status(int(u_id), 1)
                 asyncio.create_task(
                     utils.send_timed_msg(
                         bot, c_id, msg.SpamMessage.spam_18(user_full_name)
@@ -331,7 +333,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
                         )
                         fl.GLOBAL_BANNED.add(int(u_id))
                         # status 1 is ban
-                        await fl.change_user_status(db, int(u_id), 1)
+                        await fl.change_user_status(int(u_id), 1)
                         return
                 await root.user_info(
                     bot,
@@ -365,7 +367,7 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
             )
             await db.commit()
             # cache
-            fl.get_chat_settings.cache_invalidate(db, c_id)
+            fl.get_chat_settings.cache_invalidate(c_id)
             logger.warning(f":Додано новий чат\n{message.chat.title} ({c_id})")
         except Exception as e:
             logger.error(
@@ -378,19 +380,13 @@ async def echo_handler(message: Message, bot: Bot, db: aiosqlite.Connection) -> 
 ####
 async def main() -> None:
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    file_exists = os.path.exists("db/anti_spam.db")
-    async with aiosqlite.connect("db/anti_spam.db") as db:
-        if not file_exists:
-            with open("db/schema.sql") as s:
-                schema = s.read()
-                await db.executescript(schema)
-                await db.commit()
-        await fl.load_hashes(db)
-        await fl.load_banned_users(db)
+    try:
+        await db_manager.connect()
+        await fl.load_hashes()
+        await fl.load_banned_users()
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(
             bot,
-            db=db,
             allowed_updates=[
                 "message",
                 "edited_message",
@@ -399,6 +395,8 @@ async def main() -> None:
                 "message_reaction",
             ],
         )
+    finally:
+        await db_manager.close()
 
 
 if __name__ == "__main__":

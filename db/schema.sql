@@ -44,8 +44,9 @@ CREATE TABLE "chat_links"
 
 CREATE TABLE "photo_hash"
 (
-    "id"   INTEGER PRIMARY KEY AUTOINCREMENT,
-    "hash" TEXT UNIQUE
+    "id"      INTEGER PRIMARY KEY AUTOINCREMENT,
+    "hash"    TEXT UNIQUE,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE "admins"

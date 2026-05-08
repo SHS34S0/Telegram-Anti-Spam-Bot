@@ -1,7 +1,6 @@
 import asyncio
 from aiogram import Router, Bot
 import logging
-import aiosqlite
 from aiogram.types import MessageReactionUpdated
 import config
 import filters as fl
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @message_reaction.message_reaction()
 async def reaction_handler(
-    reaction: MessageReactionUpdated, bot: Bot, db: aiosqlite.Connection
+    reaction: MessageReactionUpdated, bot: Bot
 ):
     user = reaction.user
     if not user:
@@ -37,7 +36,7 @@ async def reaction_handler(
                     )
                 return
     # ==========================================================
-    if await fl.msg_count(db, u_id, c_id):
+    if await fl.msg_count(u_id, c_id):
         return
     # Ставить реакції. чи забирає ?
     if not reaction.new_reaction:
