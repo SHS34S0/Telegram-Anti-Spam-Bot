@@ -5,6 +5,7 @@ import time
 import aiosqlite
 from aiogram import Bot, F, Router
 import filters as fl
+from database import db_manager
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -148,7 +149,8 @@ async def _get_user_name(bot: Bot, chat_id: int, user_id: int) -> str:
     F.chat.type.in_({"group", "supergroup"}),
     _is_report_trigger,
 )
-async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
+async def report_handler(message: Message, bot: Bot):
+    db = await db_manager.get_db()
     reported_msg = message.reply_to_message
     reported_user = reported_msg.from_user
 
@@ -246,7 +248,8 @@ async def report_handler(message: Message, bot: Bot, db: aiosqlite.Connection):
 @report_router.callback_query(
     F.data.startswith(("report_ban:", "report_mute:", "report_ignore:"))
 )
-async def report_action(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connection):
+async def report_action(callback: CallbackQuery, bot: Bot):
+    db = await db_manager.get_db()
     parts = callback.data.split(":")
     action = parts[0]
     chat_id = int(parts[1])
@@ -462,7 +465,8 @@ async def _reports_keyboard(db: aiosqlite.Connection, bot: Bot, user_id: int):
 
 
 @report_router.message(Command("reports"), F.chat.type == "private")
-async def toggle_reports_cmd(message: Message, bot: Bot, db: aiosqlite.Connection):
+async def toggle_reports_cmd(message: Message, bot: Bot):
+    db = await db_manager.get_db()
     user_id = message.from_user.id
     keyboard = await _reports_keyboard(db, bot, user_id)
 
@@ -487,8 +491,9 @@ async def toggle_reports_cmd(message: Message, bot: Bot, db: aiosqlite.Connectio
 
 @report_router.callback_query(F.data.startswith("toggle_reports:"))
 async def toggle_reports_callback(
-    callback: CallbackQuery, bot: Bot, db: aiosqlite.Connection
+    callback: CallbackQuery, bot: Bot
 ):
+    db = await db_manager.get_db()
     chat_id = int(callback.data.split(":")[1])
     user_id = callback.from_user.id
 

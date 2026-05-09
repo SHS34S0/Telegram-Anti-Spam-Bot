@@ -16,6 +16,7 @@ from config import HF_TOKEN, MODEL, API_URL, TIMEOUT
 import messages as msg
 from collections import deque
 import time
+from database import db_manager
 
 logger = logging.getLogger(__name__)
 #######################################################
@@ -32,7 +33,8 @@ SUSPICIOUS_USERS = set()  # type: ignore[var-annotated]
 ADMINS_CACHE: dict[int, set[int]] = {}  # {chat_id: {admin_user_id, ...}}
 
 
-async def load_banned_users(db):
+async def load_banned_users():
+    db: aiosqlite.Connection = await db_manager.get_db()
     async with db.execute(
         "SELECT user_id FROM users_global WHERE status = 1"
     ) as cursor:
@@ -42,9 +44,12 @@ async def load_banned_users(db):
         print(f"✅ Завантажено {len(GLOBAL_BANNED)} користувачів в чорний список")
 
 
-async def load_hashes(db: aiosqlite.Connection):
+async def load_hashes():
+    db: aiosqlite.Connection = await db_manager.get_db()
     PHOTO_HASH.clear()  # Очищаємо перед завантаженням (на всякий випадок)
-    async with db.execute("SELECT hash FROM photo_hash") as cursor:
+    async with db.execute(
+        "SELECT hash FROM photo_hash WHERE last_seen > date('now', '-3 months') ORDER BY last_seen DESC"
+    ) as cursor:
         rows = await cursor.fetchall()
         for row in rows:
             hash_text = row[0]
@@ -133,7 +138,8 @@ async def check_user_avatar(bot, user_id: int):
     return False
 
 
-async def register_or_update_passport(db, user_id, full_name, username):
+async def register_or_update_passport(user_id, full_name, username):
+    db: aiosqlite.Connection = await db_manager.get_db()
     await db.execute(
         "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
         (user_id, full_name, username),
@@ -147,7 +153,8 @@ async def register_or_update_passport(db, user_id, full_name, username):
 
 
 @alru_cache(maxsize=1000)
-async def get_chat_settings(db, c_id):  # перевірка хто є канал чату (повертаємо id)
+async def get_chat_settings(c_id):  # перевірка хто є канал чату (повертаємо id)
+    db: aiosqlite.Connection = await db_manager.get_db()
     c = await db.cursor()
     await c.execute(
         "SELECT owner_id, rus_language, stop_word, stop_channel, stop_links, card_number, emoji_checker, reaction_spam FROM chat_links WHERE chat_id = ?",
@@ -168,7 +175,8 @@ def has_weird_chars(text):
 
 
 @alru_cache(maxsize=50000)
-async def msg_count(db, user_id, channel_id):
+async def msg_count(user_id, channel_id):
+    db: aiosqlite.Connection = await db_manager.get_db()
     c = await db.cursor()  # 1. Створили курсор
     await c.execute(  # Виконали запит через ЦЕЙ курсор
         "SELECT * FROM chat_stats WHERE user_id = ? AND channel_id = ? AND msg_count > 0",
@@ -335,15 +343,22 @@ async def check_hash(bot, photo):
         await bot.download_file(file.file_path, photo_bytes)
         photo_bytes.seek(0)
 
-        # Запускаємо генерацію хешу БЕЗ блокування основного бота
         loop = asyncio.get_running_loop()
         new_hash = await loop.run_in_executor(None, _calculate_phash, photo_bytes)
 
-        # Шукаємо збіг
         for saved_hash in PHOTO_HASH.keys():
             if new_hash - saved_hash <= THRESHOLD:
                 logger.warning(f"HASH {saved_hash}")
-                return True  # БАН
+                db = await db_manager.get_db()
+                await db.execute(
+                    """
+                    INSERT INTO photo_hash (hash, last_seen) VALUES (?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(hash) DO UPDATE SET last_seen = CURRENT_TIMESTAMP
+                    """,
+                    (str(saved_hash),),
+                )
+                await db.commit()
+                return True
 
     except Exception as e:
         logger.error(f"Помилка перевірки хешу: {e}")
@@ -486,8 +501,9 @@ def count_links(user_id, chat_id):
     return False
 
 
-async def change_user_status(db, user_id, status: int):
+async def change_user_status(user_id, status: int):
     """Status 1 is ban or 0 unban"""
+    db: aiosqlite.Connection = await db_manager.get_db()
     try:
         await db.execute(
             "UPDATE users_global SET status = ? WHERE user_id = ?",
@@ -501,7 +517,8 @@ async def change_user_status(db, user_id, status: int):
         logger.error(f"Проблема при зміні статуса користувача {user_id}\n{e}")
 
 
-async def get_user_lifespan(db, user_id, chat_id):
+async def get_user_lifespan(user_id, chat_id):
+    db: aiosqlite.Connection = await db_manager.get_db()
     cursor = await db.execute(
         "SELECT join_date, (strftime('%s','now') - strftime('%s', join_date)) FROM chat_stats WHERE user_id = ? AND channel_id = ?",
         (user_id, chat_id),

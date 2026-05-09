@@ -3,6 +3,7 @@ import logging
 from aiogram import Bot, F, Router
 import aiosqlite
 import filters as fl
+from database import db_manager
 import io
 import asyncio
 import imagehash
@@ -245,7 +246,8 @@ root_router.message.filter(F.chat.type == "private")
 
 
 @root_router.message()
-async def root_info(message: Message, bot: Bot, db):
+async def root_info(message: Message, bot: Bot):
+    db = await db_manager.get_db()
     c_id = message.chat.id
     if c_id == config.root:
         user_full_name = message.from_user.full_name
@@ -300,19 +302,20 @@ async def root_info(message: Message, bot: Bot, db):
         )
     )
 )
-async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connection):
+async def admin_settings(callback: CallbackQuery, bot: Bot):
+    db = await db_manager.get_db()
     list_data = callback.data
     value = list_data.split(":")[1]
     result = list_data.split(":")[0]
     if result.startswith("black_list"):
         fl.GLOBAL_BANNED.add(int(value))
         # status 1 is ban
-        await fl.change_user_status(db, int(value), 1)
+        await fl.change_user_status(int(value), 1)
         await callback.answer(f"✅ Додано в чорний список", show_alert=True)
     elif result in ("unblock", "skip_suspect"):
         fl.GLOBAL_BANNED.discard(int(value))
         fl.SUSPICIOUS_USERS.discard(int(value))  # type: ignore[attr-defined]
-        await fl.change_user_status(db, int(value), 0)
+        await fl.change_user_status(int(value), 0)
         if result == "unblock":
             await callback.answer("Відправляю запит зняття обмежень", show_alert=True)
             await mass_unban(bot, db, int(value), 111)
@@ -327,7 +330,10 @@ async def admin_settings(callback: CallbackQuery, bot: Bot, db: aiosqlite.Connec
         user_to_clear = int(parts[1])
         hash_value = parts[2]
         await db.execute(
-            "INSERT OR IGNORE INTO photo_hash (hash) VALUES (?)",
+            """
+            INSERT INTO photo_hash (hash, last_seen) VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT(hash) DO UPDATE SET last_seen = CURRENT_TIMESTAMP
+            """,
             (hash_value,),
         )
         await db.commit()

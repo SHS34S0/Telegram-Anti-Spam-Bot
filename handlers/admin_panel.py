@@ -1,7 +1,7 @@
 from aiogram import html, F, Router
 from aiogram.filters import Command
-import aiosqlite
 import filters as fl
+from database import db_manager
 
 from aiogram.types import (
     Message,
@@ -219,7 +219,8 @@ admin_router.message.filter(F.chat.type == "private")
         "add_admin",
     )
 )
-async def admin_start(message: Message, db):
+async def admin_start(message: Message):
+    db = await db_manager.get_db()
     if message.text == "/my_settings":
         text_settint = (
             "⚙️ Параметри захисту\n\n"
@@ -265,7 +266,8 @@ async def admin_start(message: Message, db):
         )
     )
 )
-async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
+async def admin_settings(callback: CallbackQuery):
+    db = await db_manager.get_db()
     result = callback.data
     if result.startswith("on:"):
         chat_id = int(result.split(":")[1])
@@ -281,7 +283,7 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
             )
         else:
             await callback.answer("Cхоже в вас на це нема права", show_alert=True)
-        fl.get_chat_settings.cache_invalidate(db, chat_id)
+        fl.get_chat_settings.cache_invalidate(chat_id)
     elif result.startswith("off:"):
         chat_id = int(result.split(":")[1])
         result = result.split(":")[2]
@@ -296,7 +298,7 @@ async def admin_settings(callback: CallbackQuery, db: aiosqlite.Connection):
             )
         else:
             await callback.answer("Cхоже в вас на це нема права", show_alert=True)
-        fl.get_chat_settings.cache_invalidate(db, chat_id)
+        fl.get_chat_settings.cache_invalidate(chat_id)
     elif result == "my_settings":
         text_settint = (
             "⚙️ Параметри захисту\n\n"

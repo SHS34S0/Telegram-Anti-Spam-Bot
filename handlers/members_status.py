@@ -6,13 +6,15 @@ from aiogram.enums import ChatMemberStatus
 import filters as fl
 from handlers import root
 from handlers.reports import set_report_status
+from database import db_manager
 
 status_members = Router()
 logger = logging.getLogger(__name__)
 
 
 @status_members.chat_member()
-async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
+async def track_manual_bans(event: ChatMemberUpdated, bot: Bot):
+    db = await db_manager.get_db()
     c_id = event.chat.id
     user_id = event.new_chat_member.user.id
     old_status = event.old_chat_member.status
@@ -43,7 +45,7 @@ async def track_manual_bans(event: ChatMemberUpdated, bot: Bot, db):
             admin_who_banned = event.from_user.id
             c_id = event.chat.id
             chat_name = event.chat.title
-            lifespan = await fl.get_user_lifespan(db, user_banned, c_id)
+            lifespan = await fl.get_user_lifespan(user_banned, c_id)
             if lifespan is None:
                 logger.warning(
                     f"User {user_banned} was banned in {c_id} {chat_name} by admin {admin_who_banned}, lifespan unknown (not in DB)"
