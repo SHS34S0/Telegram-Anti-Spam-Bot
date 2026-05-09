@@ -47,7 +47,9 @@ async def load_banned_users():
 async def load_hashes():
     db: aiosqlite.Connection = await db_manager.get_db()
     PHOTO_HASH.clear()  # Очищаємо перед завантаженням (на всякий випадок)
-    async with db.execute("SELECT hash FROM photo_hash") as cursor:
+    async with db.execute(
+        "SELECT hash FROM photo_hash WHERE last_seen > date('now', '-3 months') ORDER BY last_seen DESC"
+    ) as cursor:
         rows = await cursor.fetchall()
         for row in rows:
             hash_text = row[0]
