@@ -2,6 +2,9 @@ venv/
 __pycache__/
 .pytest_cache/
 anti_spam.db
+*.db-journal
+*.db-wal
+*.db-shm
 config.py
 fot.png
 test.py
