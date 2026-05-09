@@ -75,7 +75,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
         root.chats_info[c_id] = chat_name
 
     if u_id in fl.GLOBAL_BANNED:
-        await utils.safe_delete(message)  # Безпечне видалення
+        await utils.safe_delete(message)
         await utils.safe_ban(message, u_id)
         asyncio.create_task(
             utils.send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
@@ -243,6 +243,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                 await utils.safe_delete(message)
                 await utils.safe_ban(message, u_id)
                 fl.GLOBAL_BANNED.add(int(u_id))
+                await utils.delete_user_reactions(bot, u_id)
                 # status 1 is ban
                 await fl.change_user_status(int(u_id), 1)
                 asyncio.create_task(
@@ -332,6 +333,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                             f"ПРЕМІУМ AI\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(text or 'Медіа')[:200]}",
                         )
                         fl.GLOBAL_BANNED.add(int(u_id))
+                        await utils.delete_user_reactions(bot, u_id)
                         # status 1 is ban
                         await fl.change_user_status(int(u_id), 1)
                         return

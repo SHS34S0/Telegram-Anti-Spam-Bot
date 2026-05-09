@@ -3,6 +3,7 @@ import logging
 from aiogram import Bot, F, Router
 import aiosqlite
 import filters as fl
+import utils
 from database import db_manager
 import io
 import asyncio
@@ -17,6 +18,7 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
+from utils import delete_user_reactions
 
 chats_info = {}
 
@@ -177,6 +179,7 @@ async def user_info(
         )
         fl.SUSPICIOUS_USERS.discard(int(u_id))  # type: ignore[attr-defined]
         fl.GLOBAL_BANNED.add(u_id)
+        await utils.delete_user_reactions(bot, u_id)
 
         # Delete the message that triggered this alert
         if message_id:
@@ -254,6 +257,7 @@ async def root_info(message: Message, bot: Bot):
         chat_name = message.chat.title or "Особисті повідомлення"
         if message.text and message.text.isdigit():
             fl.GLOBAL_BANNED.add(int(message.text))
+            await utils.delete_user_reactions(bot, int(message.text))
             await mass_blocking(bot, db, int(message.text), 111)
 
             await user_info(
@@ -288,7 +292,6 @@ async def root_info(message: Message, bot: Bot):
                 text=f"📊 Список активних чатів з моменту перезавантаження:\n\n{chats_text}",
                 parse_mode="HTML",
             )
-
         return
 
 
@@ -309,6 +312,7 @@ async def admin_settings(callback: CallbackQuery, bot: Bot):
     result = list_data.split(":")[0]
     if result.startswith("black_list"):
         fl.GLOBAL_BANNED.add(int(value))
+        await utils.delete_user_reactions(bot, int(value))
         # status 1 is ban
         await fl.change_user_status(int(value), 1)
         await callback.answer(f"✅ Додано в чорний список", show_alert=True)

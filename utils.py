@@ -27,9 +27,7 @@ async def safe_delete(message):
             )
     except TelegramBadRequest as e:
         # Message was already deleted by admin or expired — not a real error
-        logger.warning(
-            f"Message already gone, skipping delete: {e}"
-        )
+        logger.warning(f"Message already gone, skipping delete: {e}")
     except Exception as e:
         logger.error(
             f"помилка {e} при видаленні повідомлення від {message.from_user.first_name} {message.from_user.username} {message.from_user.id}"
@@ -90,6 +88,28 @@ async def safe_mute(message, u_id, sec=0):
         await fl.send_remote_log(
             message, config.help_token, config.root, "Помилка під час мут користувача"
         )
+
+
+async def delete_user_reactions(bot, u_id: int):
+    if u_id not in fl.REACTION_HISTORY:
+        logger.warning(f"[reactions] user {u_id} not in REACTION_HISTORY, skip")
+        return
+    logger.warning(f"[reactions] deleting reactions for user {u_id}, chats: {list(fl.REACTION_HISTORY[u_id].keys())}")
+    for c_id, messages in list(fl.REACTION_HISTORY[u_id].items()):
+        for msg_id in list(messages):
+            try:
+                await bot.delete_message_reaction(
+                    chat_id=c_id,
+                    message_id=msg_id,
+                    user_id=u_id,
+                )
+                logger.warning(f"[reactions] deleted reaction msg={msg_id} chat={c_id} user={u_id}")
+            except Exception as e:
+                logger.warning(
+                    f"[reactions] Could not delete reaction msg={msg_id} chat={c_id} user={u_id}: {e}"
+                )
+    fl.REACTION_HISTORY.pop(u_id, None)
+    logger.warning(f"[reactions] done for user {u_id}")
 
 
 async def send_timed_msg(bot, chat_id, text, delay=60):

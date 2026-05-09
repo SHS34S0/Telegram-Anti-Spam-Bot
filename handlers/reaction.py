@@ -1,20 +1,20 @@
 import asyncio
+import time
+
 from aiogram import Router, Bot
 import logging
 from aiogram.types import MessageReactionUpdated
 import config
 import filters as fl
 import messages as msg
-from utils import send_timed_msg
+from utils import send_timed_msg, delete_user_reactions
 
 message_reaction = Router()
 logger = logging.getLogger(__name__)
 
 
 @message_reaction.message_reaction()
-async def reaction_handler(
-    reaction: MessageReactionUpdated, bot: Bot
-):
+async def reaction_handler(reaction: MessageReactionUpdated, bot: Bot):
     user = reaction.user
     if not user:
         return  # це може бути анонімний адмін або канал
@@ -35,6 +35,21 @@ async def reaction_handler(
                         f"Помилка {e} при спробі видалити повідомлення через реакцію 🤡 від користувача {user_full_name} ({u_id})\nГрупа {reaction.chat.title} ({c_id})"
                     )
                 return
+    # example: {123456: {-100987: {99: (1715000000, [ReactionTypeEmoji(emoji='👍'), ReactionTypeEmoji(emoji='❤️')])}}}
+    now = time.time()
+    if reaction.new_reaction:
+        if u_id not in fl.REACTION_HISTORY:
+            fl.REACTION_HISTORY[u_id] = {}
+        if c_id not in fl.REACTION_HISTORY[u_id]:
+            fl.REACTION_HISTORY[u_id][c_id] = {}
+        fl.REACTION_HISTORY[u_id][c_id][reaction.message_id] = (
+            now,
+            reaction.new_reaction,
+        )
+    else:
+        if u_id in fl.REACTION_HISTORY:
+            if c_id in fl.REACTION_HISTORY[u_id]:
+                fl.REACTION_HISTORY[u_id][c_id].pop(reaction.message_id, None)
     # ==========================================================
     if await fl.msg_count(u_id, c_id):
         return
@@ -42,8 +57,9 @@ async def reaction_handler(
     if not reaction.new_reaction:
         return
     dc_number = await fl.check_dc_number(bot, u_id)
-    if dc_number == 100:
+    if dc_number == 100 or u_id in fl.GLOBAL_BANNED:
         await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
+        await delete_user_reactions(bot, u_id)
         logger.warning(
             f"Заблоковано {user_full_name} {u_id}\nГрупа {reaction.chat.title} {c_id} \nПричина: Reaction Spam"
         )

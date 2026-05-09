@@ -29,6 +29,7 @@ THRESHOLD = 5
 PHOTO_HASH = {}  # type: ignore[var-annotated]
 LINKS_HISTORY = {}
 GLOBAL_BANNED = set()
+REACTION_HISTORY = {}
 SUSPICIOUS_USERS = set()  # type: ignore[var-annotated]
 ADMINS_CACHE: dict[int, set[int]] = {}  # {chat_id: {admin_user_id, ...}}
 
