@@ -90,42 +90,33 @@ async def safe_mute(message, u_id, sec=0):
         )
 
 
-async def delete_user_reactions(bot, u_id: int):
-    if u_id not in fl.REACTION_HISTORY:
-        logger.warning(f"[reactions] user {u_id} not in REACTION_HISTORY, skip")
-        return
-    logger.warning(f"[reactions] deleting reactions for user {u_id}, chats: {list(fl.REACTION_HISTORY[u_id].keys())}")
-    for c_id, messages in list(fl.REACTION_HISTORY[u_id].items()):
+async def delete_user_history(bot, u_id: int):
+    all_chats = set(fl.REACTION_HISTORY.get(u_id, {})) | set(fl.MSG_HISTORY.get(u_id, {}))
+    for c_id in all_chats:
+        try:
+            await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
+            logger.warning(f"[history] banned user={u_id} chat={c_id}")
+        except Exception as e:
+            logger.warning(f"[history] could not ban user={u_id} chat={c_id}: {e}")
+
+    for c_id, messages in list(fl.REACTION_HISTORY.get(u_id, {}).items()):
         for msg_id in list(messages):
             try:
-                await bot.delete_message_reaction(
-                    chat_id=c_id,
-                    message_id=msg_id,
-                    user_id=u_id,
-                )
-                logger.warning(f"[reactions] deleted reaction msg={msg_id} chat={c_id} user={u_id}")
+                await bot.delete_message_reaction(chat_id=c_id, message_id=msg_id, user_id=u_id)
+                logger.warning(f"[history] deleted reaction msg={msg_id} chat={c_id} user={u_id}")
             except Exception as e:
-                logger.warning(
-                    f"[reactions] Could not delete reaction msg={msg_id} chat={c_id} user={u_id}: {e}"
-                )
+                logger.warning(f"[history] could not delete reaction msg={msg_id} chat={c_id} user={u_id}: {e}")
     fl.REACTION_HISTORY.pop(u_id, None)
-    logger.warning(f"[reactions] done for user {u_id}")
 
-
-async def delete_user_messages(bot, u_id: int):
-    if u_id not in fl.MSG_HISTORY:
-        logger.warning(f"[messages] user {u_id} not in MSG_HISTORY, skip")
-        return
-    logger.warning(f"[messages] deleting messages for user {u_id}, chats: {list(fl.MSG_HISTORY[u_id].keys())}")
-    for c_id, messages in list(fl.MSG_HISTORY[u_id].items()):
+    for c_id, messages in list(fl.MSG_HISTORY.get(u_id, {}).items()):
         for msg_id in list(messages):
             try:
                 await bot.delete_message(chat_id=c_id, message_id=msg_id)
-                logger.warning(f"[messages] deleted msg={msg_id} chat={c_id} user={u_id}")
+                logger.warning(f"[history] deleted message msg={msg_id} chat={c_id} user={u_id}")
             except Exception as e:
-                logger.warning(f"[messages] could not delete msg={msg_id} chat={c_id} user={u_id}: {e}")
+                logger.warning(f"[history] could not delete message msg={msg_id} chat={c_id} user={u_id}: {e}")
     fl.MSG_HISTORY.pop(u_id, None)
-    logger.warning(f"[messages] done for user {u_id}")
+    logger.warning(f"[history] done for user {u_id}")
 
 
 async def send_timed_msg(bot, chat_id, text, delay=60):
