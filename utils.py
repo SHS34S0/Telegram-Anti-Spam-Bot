@@ -112,6 +112,22 @@ async def delete_user_reactions(bot, u_id: int):
     logger.warning(f"[reactions] done for user {u_id}")
 
 
+async def delete_user_messages(bot, u_id: int):
+    if u_id not in fl.MSG_HISTORY:
+        logger.warning(f"[messages] user {u_id} not in MSG_HISTORY, skip")
+        return
+    logger.warning(f"[messages] deleting messages for user {u_id}, chats: {list(fl.MSG_HISTORY[u_id].keys())}")
+    for c_id, messages in list(fl.MSG_HISTORY[u_id].items()):
+        for msg_id in list(messages):
+            try:
+                await bot.delete_message(chat_id=c_id, message_id=msg_id)
+                logger.warning(f"[messages] deleted msg={msg_id} chat={c_id} user={u_id}")
+            except Exception as e:
+                logger.warning(f"[messages] could not delete msg={msg_id} chat={c_id} user={u_id}: {e}")
+    fl.MSG_HISTORY.pop(u_id, None)
+    logger.warning(f"[messages] done for user {u_id}")
+
+
 async def send_timed_msg(bot, chat_id, text, delay=60):
     try:
         msg_info = await bot.send_message(chat_id=chat_id, text=text)

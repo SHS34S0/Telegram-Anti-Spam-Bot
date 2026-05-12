@@ -7,7 +7,7 @@ from aiogram.types import MessageReactionUpdated
 import config
 import filters as fl
 import messages as msg
-from utils import send_timed_msg, delete_user_reactions
+from utils import send_timed_msg, delete_user_reactions, delete_user_messages
 
 message_reaction = Router()
 logger = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ async def reaction_handler(reaction: MessageReactionUpdated, bot: Bot):
     if dc_number == 100 or u_id in fl.GLOBAL_BANNED:
         await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
         await delete_user_reactions(bot, u_id)
+        await delete_user_messages(bot, u_id)
         logger.warning(
             f"Заблоковано {user_full_name} {u_id}\nГрупа {reaction.chat.title} {c_id} \nПричина: Reaction Spam"
         )

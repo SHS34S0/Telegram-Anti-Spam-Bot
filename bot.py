@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import time
 import aiosqlite
 import config
 from aiogram import Bot, Dispatcher, F, Router
@@ -65,6 +66,12 @@ async def echo_handler(message: Message, bot: Bot) -> None:
     username = message.from_user.username  # username може не бути
     user_full_name = message.from_user.full_name
     c_id = message.chat.id
+    # track message so we can bulk-delete on ban
+    if u_id not in fl.MSG_HISTORY:
+        fl.MSG_HISTORY[u_id] = {}
+    if c_id not in fl.MSG_HISTORY[u_id]:
+        fl.MSG_HISTORY[u_id][c_id] = {}
+    fl.MSG_HISTORY[u_id][c_id][message.message_id] = (time.time(), None)
     chat_name = message.chat.title or "Особисті повідомлення"
     settings = await fl.get_chat_settings(c_id)
     # caption is used when media has a text under it (photo, video, etc.)
@@ -244,6 +251,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                 await utils.safe_ban(message, u_id)
                 fl.GLOBAL_BANNED.add(int(u_id))
                 await utils.delete_user_reactions(bot, u_id)
+                await utils.delete_user_messages(bot, u_id)
                 # status 1 is ban
                 await fl.change_user_status(int(u_id), 1)
                 asyncio.create_task(
@@ -334,6 +342,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                         )
                         fl.GLOBAL_BANNED.add(int(u_id))
                         await utils.delete_user_reactions(bot, u_id)
+                        await utils.delete_user_messages(bot, u_id)
                         # status 1 is ban
                         await fl.change_user_status(int(u_id), 1)
                         return
