@@ -11,6 +11,7 @@ test.py
 new.py
 service
 dc.json
+spam_patterns.py
 db/1.sql
 my_log.log
 .idea/

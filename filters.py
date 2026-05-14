@@ -14,6 +14,7 @@ import logging
 import httpx
 from config import HF_TOKEN, MODEL, API_URL, TIMEOUT
 import messages as msg
+from spam_patterns import BIO_SPAM_RE, BIO_LINK_RE, RUS_CHARS, RUS_WORDS, WEIRD_CHARS_RE
 from collections import deque
 import time
 from database import db_manager
@@ -169,9 +170,7 @@ async def get_chat_settings(c_id):  # перевірка хто є канал ч
 
 
 def has_weird_chars(text):
-    # Шукаємо специфічні символи
-    weird_pattern = r"[ʜᴋᴀᴏʙʏɪᴍɴʟᴜꜰᴇᴘ]"
-    if re.search(weird_pattern, text, re.IGNORECASE):
+    if WEIRD_CHARS_RE.search(text):
         return True
     return False
 
@@ -245,15 +244,10 @@ async def check_user_bio(bot, user_id):
         bio = chat_info.bio
         if not bio:
             return False  # Біо немає - все ок
-        # https://t.me/+
-        link_pattern = (
-            r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/\+"
-        )
-        pattern = r"(сторис|истории|прогноз|100%|кэф|коэф|коэффициент|₽|сторисе|экспресс|бесплатный|прибыль|доход|заработок|канальчік|кохатися|секретик|відвертими фото)"
         # priority
-        if re.search(pattern, bio, re.IGNORECASE):
+        if BIO_SPAM_RE.search(bio):
             return 100
-        if re.search(link_pattern, bio):
+        if BIO_LINK_RE.search(bio):
             return True  # Знайшли сміття
 
     except Exception as e:
@@ -265,43 +259,10 @@ async def check_user_bio(bot, user_id):
 
 def rus_language(text):
     for i in text.lower():
-        if i in ["ы", "э", "ъ", "ё"]:
+        if i in RUS_CHARS:
             return True
-    words = {
-        "что",
-        "как",
-        "или",
-        "если",
-        "почему",
-        "вот",
-        "только",
-        "здесь",
-        "сейчас",
-        "теперь",
-        "никогда",
-        "очень",
-        "когда",
-        "где",
-        "нет",
-        "конечно",
-        "наверное",
-        "пожалуйста",
-        "спасибо",
-        "человек",
-        "жизнь",
-        "такой",
-        "могу",
-        "понимаю",
-        "должен",
-        "нужен",
-        "говоря",
-        "личку",
-        "работа",
-        "нужен",
-        "каждую",
-    }
 
-    have = words & set(text.lower().split())
+    have = RUS_WORDS & set(text.lower().split())
     if have:
         return True
     else:
