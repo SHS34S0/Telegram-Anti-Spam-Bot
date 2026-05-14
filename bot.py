@@ -286,14 +286,8 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                             bot, c_id, msg.SpamMessage.spam(user_full_name)
                         )
                     )
-                    await root.user_info(
-                        bot,
-                        c_id,
-                        u_id,
-                        user_full_name,
-                        chat_name,
-                        f"Біо БАН\n{fl.generate_message_link(message)}\n\n{(text or '')[:200]}",
-                    )
+                    fl.GLOBAL_BANNED.add(int(u_id))
+                    await utils.delete_user_history(bot, u_id)
 
                     return
                 else:  # тимчасово щоб наповнити базу
