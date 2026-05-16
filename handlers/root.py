@@ -362,9 +362,9 @@ async def root_info(message: Message, bot: Bot):
                     f"  SUSPICIOUS_USERS: <b>{len(fl.SUSPICIOUS_USERS)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.SUSPICIOUS_USERS))}\n"
                     f"  LINKS_HISTORY: <b>{len(fl.LINKS_HISTORY)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.LINKS_HISTORY))}\n\n"
                     f"💾 <b>Кеш (alru_cache):</b>\n"
-                    f"  msg_count: <b>{fl.msg_count.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.msg_count, '_cache', {})))}\n"
-                    f"  chat_settings: <b>{fl.get_chat_settings.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.get_chat_settings, '_cache', {})))}\n"
-                    f"  check_dc: <b>{fl.check_dc_number.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.check_dc_number, '_cache', {})))}"
+                    f"  msg_count: <b>{fl.msg_count.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.msg_count, '_LRUCacheWrapper__cache', {})))}\n"
+                    f"  chat_settings: <b>{fl.get_chat_settings.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.get_chat_settings, '_LRUCacheWrapper__cache', {})))}\n"
+                    f"  check_dc: <b>{fl.check_dc_number.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.check_dc_number, '_LRUCacheWrapper__cache', {})))}"
                 ),
                 parse_mode="HTML",
             )
