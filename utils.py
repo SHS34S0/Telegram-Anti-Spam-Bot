@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import (
     ChatPermissions,
 )
+from handlers import root
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ async def safe_delete(message):
                 config.root,
                 "DELETE MESSAGE",
             )
+        root.stats["total delete messages"] += 1
     except TelegramBadRequest as e:
         # Message was already deleted by admin or expired — not a real error
         logger.warning(f"Message already gone, skipping delete: {e}")
@@ -53,6 +55,7 @@ async def safe_ban(message, u_id, sec=0):
             f"Заблоковано {message.from_user.first_name} {message.from_user.username} {message.from_user.id}\nГрупа {message.chat.title} {message.chat.id}"
         )
         await fl.send_remote_log(message, config.help_token, config.root, "BAN USER")
+        root.stats["total ban"] += 1
     except Exception as e:
         # Ловимо помилки (наприклад, бот не адмін)
         logger.error(
@@ -80,6 +83,7 @@ async def safe_mute(message, u_id, sec=0):
             f"МУТ {message.from_user.first_name} {message.from_user.username} {message.from_user.id}\nГрупа {message.chat.title} {message.chat.id}"
         )
         await fl.send_remote_log(message, config.help_token, config.root, "MUTE USER")
+        root.stats["total mute"] += 1
 
     except Exception as e:
         logger.error(
@@ -91,7 +95,9 @@ async def safe_mute(message, u_id, sec=0):
 
 
 async def delete_user_history(bot, u_id: int):
-    all_chats = set(fl.REACTION_HISTORY.get(u_id, {})) | set(fl.MSG_HISTORY.get(u_id, {}))
+    all_chats = set(fl.REACTION_HISTORY.get(u_id, {})) | set(
+        fl.MSG_HISTORY.get(u_id, {})
+    )
     for c_id in all_chats:
         try:
             await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
@@ -102,19 +108,29 @@ async def delete_user_history(bot, u_id: int):
     for c_id, messages in list(fl.REACTION_HISTORY.get(u_id, {}).items()):
         for msg_id in list(messages):
             try:
-                await bot.delete_message_reaction(chat_id=c_id, message_id=msg_id, user_id=u_id)
-                logger.warning(f"[history] deleted reaction msg={msg_id} chat={c_id} user={u_id}")
+                await bot.delete_message_reaction(
+                    chat_id=c_id, message_id=msg_id, user_id=u_id
+                )
+                logger.warning(
+                    f"[history] deleted reaction msg={msg_id} chat={c_id} user={u_id}"
+                )
             except Exception as e:
-                logger.warning(f"[history] could not delete reaction msg={msg_id} chat={c_id} user={u_id}: {e}")
+                logger.warning(
+                    f"[history] could not delete reaction msg={msg_id} chat={c_id} user={u_id}: {e}"
+                )
     fl.REACTION_HISTORY.pop(u_id, None)
 
     for c_id, messages in list(fl.MSG_HISTORY.get(u_id, {}).items()):
         for msg_id in list(messages):
             try:
                 await bot.delete_message(chat_id=c_id, message_id=msg_id)
-                logger.warning(f"[history] deleted message msg={msg_id} chat={c_id} user={u_id}")
+                logger.warning(
+                    f"[history] deleted message msg={msg_id} chat={c_id} user={u_id}"
+                )
             except Exception as e:
-                logger.warning(f"[history] could not delete message msg={msg_id} chat={c_id} user={u_id}: {e}")
+                logger.warning(
+                    f"[history] could not delete message msg={msg_id} chat={c_id} user={u_id}: {e}"
+                )
     fl.MSG_HISTORY.pop(u_id, None)
     logger.warning(f"[history] done for user {u_id}")
 

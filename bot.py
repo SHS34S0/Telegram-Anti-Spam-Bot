@@ -1,5 +1,4 @@
 import asyncio
-import os
 import sys
 import time
 import aiosqlite
@@ -90,6 +89,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
         logger.warning(
             f"Користувач {u_id} заблокований в {c_id} оскільки вже був в BLACK LIST"
         )
+        root.stats["global ban"] += 1
         return
     if settings:
         (
@@ -110,6 +110,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                 return
             # якщо код тут, то це спамер або хтось бажає бути анонімним
             await utils.safe_delete(message)
+            root.stats["stop channel"] += 1
             return
         ## Перевірок на шлюхо-символи
         if text and fl.has_weird_chars(text):
@@ -118,6 +119,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
             asyncio.create_task(
                 utils.send_timed_msg(bot, c_id, msg.SpamMessage.spam(user_full_name))
             )
+            root.stats["bad chars"] += 1
             return
         if text and card_number == 1 and fl.check_card(text):
             try:  # Якщо було спрацювання
@@ -135,6 +137,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                             msg.SpamMessage.stop_card_number(u_id, user_full_name),
                         )
                     )
+                    root.stats["card numbers"] += 1
                     return  # Чат чистий, далі не йдемо
             except Exception as e:
                 logger.error(f"щось не так апм спрацюванні номеру карти {e}")
@@ -167,6 +170,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                         bot, c_id, msg.SpamMessage.emoji_spam(user_full_name)
                     )
                 )
+                root.stats["emoji checker"] += 1
                 return
             else:
                 await utils.safe_delete(message)
@@ -185,6 +189,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                         bot, c_id, msg.SpamMessage.emoji_spam(user_full_name)
                     )
                 )
+                root.stats["emoji checker"] += 1
                 return
         if stop_links == 1:
             bad_types = {"mention", "url", "text_link"}
@@ -199,6 +204,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                         pass
                     else:
                         await utils.safe_delete(message)
+                        root.stats["stop links"] += 1
                         if fl.count_links(u_id, c_id):
                             await utils.safe_mute(message, u_id)
                             asyncio.create_task(
@@ -249,6 +255,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
             if dc_number == 100:
                 await utils.safe_delete(message)
                 await utils.safe_ban(message, u_id)
+                root.stats["found hash"] += 1
                 fl.GLOBAL_BANNED.add(int(u_id))
                 await utils.delete_user_history(bot, u_id)
                 # status 1 is ban
@@ -275,6 +282,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                         bot, c_id, msg.SpamMessage.mute(user_full_name)
                     )
                 )
+                root.stats["bad dc"] += 1
                 return
             bio = await fl.check_user_bio(bot, u_id)
             if bio:
@@ -288,7 +296,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                     )
                     fl.GLOBAL_BANNED.add(int(u_id))
                     await utils.delete_user_history(bot, u_id)
-
+                    root.stats["bad bio"] += 1
                     return
                 else:  # тимчасово щоб наповнити базу
                     chat_info = await bot.get_chat(u_id)
@@ -337,6 +345,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                         await utils.delete_user_history(bot, u_id)
                         # status 1 is ban
                         await fl.change_user_status(int(u_id), 1)
+                        root.stats["premium work"] += 1
                         return
                 await root.user_info(
                     bot,

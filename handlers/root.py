@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 
 from aiogram import Bot, F, Router
 import aiosqlite
@@ -20,6 +21,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 
 chats_info = {}
+stats = Counter()
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +291,29 @@ async def root_info(message: Message, bot: Bot):
             await bot.send_message(
                 chat_id=str(config.root),
                 text=f"📊 Список активних чатів з моменту перезавантаження:\n\n{chats_text}",
+                parse_mode="HTML",
+            )
+        if message.text and message.text.lower() in ["stats", "stat", "statistics"]:
+            await bot.send_message(
+                chat_id=str(config.root),
+                text=(
+                    f"📊 <b>Статистика з моменту перезапуску</b>\n\n"
+                    f"🚫 <b>Дії:</b>\n"
+                    f"  Банів: <b>{stats['total ban']}</b>\n"
+                    f"  Мутів: <b>{stats['total mute']}</b>\n"
+                    f"  Видалено повідомлень: <b>{stats['total delete messages']}</b>\n\n"
+                    f"🔍 <b>Причини спрацювання:</b>\n"
+                    f"  Глобальний чорний список: <b>{stats['global ban']}</b>\n"
+                    f"  Підозрілі символи: <b>{stats['bad chars']}</b>\n"
+                    f"  Стоп канал: <b>{stats['stop channel']}</b>\n"
+                    f"  Номер карти: <b>{stats['card numbers']}</b>\n"
+                    f"  Емодзі спам: <b>{stats['emoji checker']}</b>\n"
+                    f"  Посилання: <b>{stats['stop links']}</b>\n"
+                    f"  Хеш фото: <b>{stats['found hash']}</b>\n"
+                    f"  Поганий DC: <b>{stats['bad dc']}</b>\n"
+                    f"  Погане біо: <b>{stats['bad bio']}</b>\n"
+                    f"  Преміум AI: <b>{stats['premium work']}</b>"
+                ),
                 parse_mode="HTML",
             )
         return
