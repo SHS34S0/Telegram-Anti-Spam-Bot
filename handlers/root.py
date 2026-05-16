@@ -1,4 +1,5 @@
 import logging
+import time
 from collections import Counter
 
 from aiogram import Bot, F, Router
@@ -22,6 +23,20 @@ import config
 
 chats_info = {}
 stats = Counter()
+START_TIME = time.time()
+
+
+def _format_uptime() -> str:
+    delta = int(time.time() - START_TIME)
+    days, remainder = divmod(delta, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if days:
+        return f"{days} д {hours} год {minutes} хв"
+    if hours:
+        return f"{hours} год {minutes} хв"
+    return f"{minutes} хв {seconds} с"
+
 
 logger = logging.getLogger(__name__)
 
@@ -290,14 +305,15 @@ async def root_info(message: Message, bot: Bot):
                 )
             await bot.send_message(
                 chat_id=str(config.root),
-                text=f"📊 Список активних чатів з моменту перезавантаження:\n\n{chats_text}",
+                text=f"📊 Список активних чатів з моменту перезавантаження:\n⏱ Час роботи: <b>{_format_uptime()}</b>\n\n{chats_text}",
                 parse_mode="HTML",
             )
         if message.text and message.text.lower() in ["stats", "stat", "statistics"]:
             await bot.send_message(
                 chat_id=str(config.root),
                 text=(
-                    f"📊 <b>Статистика з моменту перезапуску</b>\n\n"
+                    f"📊 <b>Статистика з моменту перезапуску</b>\n"
+                    f"⏱ Час роботи: <b>{_format_uptime()}</b>\n\n"
                     f"🚫 <b>Дії:</b>\n"
                     f"  Банів: <b>{stats['total ban']}</b>\n"
                     f"  Мутів: <b>{stats['total mute']}</b>\n"
