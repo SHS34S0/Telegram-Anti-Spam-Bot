@@ -22,6 +22,8 @@ async def reaction_handler(reaction: MessageReactionUpdated, bot: Bot):
     u_id = user.id
     c_id = reaction.chat.id
     user_full_name = reaction.user.full_name
+    fl.ACTIVE_USERS.add(u_id)
+    await fl.register_or_update_passport(u_id, user_full_name, user.username)
     #  Щоб мати можливість видаляти повідомлення вручну де я не є модератором
     if str(u_id) == str(config.root):
         for react in reaction.new_reaction:
