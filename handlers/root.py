@@ -2,6 +2,8 @@ import logging
 import time
 from collections import Counter
 
+from pympler import asizeof
+
 from aiogram import Bot, F, Router
 import aiosqlite
 import filters as fl
@@ -36,6 +38,32 @@ def _format_uptime() -> str:
     if hours:
         return f"{hours} год {minutes} хв"
     return f"{minutes} хв {seconds} с"
+
+
+def _format_bytes(size: int) -> str:
+    if size >= 1_048_576:
+        return f"{size / 1_048_576:.1f} МБ"
+    if size >= 1024:
+        return f"{size / 1024:.1f} КБ"
+    return f"{size} Б"
+
+
+def _get_proc_info() -> dict:
+    fields = {"VmRSS", "VmPeak", "VmHWM", "VmSwap", "Threads", "FDSize"}
+    result = {}
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                key = line.split(":")[0]
+                if key in fields:
+                    parts = line.split()
+                    # lines with kB: ["VmRSS:", "187432", "kB"]
+                    # lines without: ["Threads:", "3"]
+                    value = int(parts[1])
+                    result[key] = _format_bytes(value * 1024) if len(parts) == 3 else str(value)
+    except Exception:
+        pass
+    return result
 
 
 logger = logging.getLogger(__name__)
@@ -306,6 +334,38 @@ async def root_info(message: Message, bot: Bot):
             await bot.send_message(
                 chat_id=str(config.root),
                 text=f"📊 Список активних чатів з моменту перезавантаження:\n⏱ Час роботи: <b>{_format_uptime()}</b>\n\n{chats_text}",
+                parse_mode="HTML",
+            )
+        if message.text and message.text.lower() == "mem":
+            p = _get_proc_info()
+            msg_total = sum(
+                len(msgs)
+                for chats in fl.MSG_HISTORY.values()
+                for msgs in chats.values()
+            )
+            swap_line = f"  Swap: <b>{p.get('VmSwap', 'н/д')}</b>\n" if p.get("VmSwap", "0 Б") != "0 Б" else ""
+            await bot.send_message(
+                chat_id=str(config.root),
+                text=(
+                    f"🧠 <b>Пам'ять процесу</b>  ⏱ {_format_uptime()}\n"
+                    f"  Зараз (RSS): <b>{p.get('VmRSS', 'н/д')}</b>\n"
+                    f"  Пік (HWM):   <b>{p.get('VmHWM', 'н/д')}</b>\n"
+                    f"  Пік (Peak):  <b>{p.get('VmPeak', 'н/д')}</b>\n"
+                    f"{swap_line}"
+                    f"  Потоки: <b>{p.get('Threads', 'н/д')}</b>  |  "
+                    f"FD: <b>{p.get('FDSize', 'н/д')}</b>\n\n"
+                    f"📦 <b>Структури:</b>\n"
+                    f"  GLOBAL_BANNED: <b>{len(fl.GLOBAL_BANNED)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.GLOBAL_BANNED))}\n"
+                    f"  PHOTO_HASH: <b>{len(fl.PHOTO_HASH)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.PHOTO_HASH))}\n"
+                    f"  MSG_HISTORY: <b>{len(fl.MSG_HISTORY)}</b> юз. / <b>{msg_total}</b> пов. — {_format_bytes(asizeof.asizeof(fl.MSG_HISTORY))}\n"
+                    f"  REACTION_HISTORY: <b>{len(fl.REACTION_HISTORY)}</b> юз. — {_format_bytes(asizeof.asizeof(fl.REACTION_HISTORY))}\n"
+                    f"  SUSPICIOUS_USERS: <b>{len(fl.SUSPICIOUS_USERS)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.SUSPICIOUS_USERS))}\n"
+                    f"  LINKS_HISTORY: <b>{len(fl.LINKS_HISTORY)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.LINKS_HISTORY))}\n\n"
+                    f"💾 <b>Кеш (alru_cache):</b>\n"
+                    f"  msg_count: <b>{fl.msg_count.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.msg_count, '_cache', {})))}\n"
+                    f"  chat_settings: <b>{fl.get_chat_settings.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.get_chat_settings, '_cache', {})))}\n"
+                    f"  check_dc: <b>{fl.check_dc_number.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.check_dc_number, '_cache', {})))}"
+                ),
                 parse_mode="HTML",
             )
         if message.text and message.text.lower() in ["stats", "stat", "statistics"]:

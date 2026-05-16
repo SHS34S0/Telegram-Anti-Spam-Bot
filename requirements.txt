@@ -10,3 +10,4 @@ async-lru
 ImageHash
 Pillow
 httpx
+pympler
