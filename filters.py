@@ -34,6 +34,10 @@ REACTION_HISTORY = {}
 MSG_HISTORY = {}
 SUSPICIOUS_USERS = set()  # type: ignore[var-annotated]
 ADMINS_CACHE: dict[int, set[int]] = {}  # {chat_id: {admin_user_id, ...}}
+PASSPORT_HASHES: set[int] = (
+    set()
+)  # hashes of (user_id, name, username) to skip unchanged passports
+ACTIVE_USERS: set[int] = set()  # user_ids active since last flush
 
 
 async def load_banned_users():
@@ -58,6 +62,36 @@ async def load_hashes():
             hash_text = row[0]
             PHOTO_HASH[imagehash.hex_to_hash(hash_text)] = True
     print(f"✅ Завантажено {len(PHOTO_HASH)} фото у словник фільтрів.")
+
+
+async def load_passport_cache():
+    """Warm up PASSPORT_HASHES with users active in the last 5 days."""
+    db: aiosqlite.Connection = await db_manager.get_db()
+    async with db.execute(
+        "SELECT user_id, name, username FROM users_global WHERE last_seen > date('now', '-5 days')"
+    ) as cursor:
+        rows = await cursor.fetchall()
+        for row in rows:
+            PASSPORT_HASHES.add(hash((row[0], row[1], row[2])))
+    print(f"✅ Прогріто {len(PASSPORT_HASHES)} паспортів у кеш")
+
+
+async def flush_active_users():
+    """Batch-update last_seen for all active users and clear the set."""
+    if not ACTIVE_USERS:
+        return
+    db: aiosqlite.Connection = await db_manager.get_db()
+    users = list(ACTIVE_USERS)
+    ACTIVE_USERS.clear()
+    chunk_size = 900  # stay under SQLite's 999-variable limit
+    for i in range(0, len(users), chunk_size):
+        chunk = users[i : i + chunk_size]
+        placeholders = ",".join("?" * len(chunk))
+        await db.execute(
+            f"UPDATE users_global SET last_seen = CURRENT_TIMESTAMP WHERE user_id IN ({placeholders})",
+            chunk,
+        )
+    await db.commit()
 
 
 ##########################################################################
@@ -142,17 +176,21 @@ async def check_user_avatar(bot, user_id: int):
 
 
 async def register_or_update_passport(user_id, full_name, username):
+    passport_hash = hash((user_id, full_name, username))
+    if passport_hash in PASSPORT_HASHES:
+        return  # data unchanged, skip DB write
     db: aiosqlite.Connection = await db_manager.get_db()
     await db.execute(
         "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
         (user_id, full_name, username),
     )
-    # Цей апдейт потрібен, щоб оновлювати зміну імені
+    # update name/username if they changed
     await db.execute(
         "UPDATE users_global SET name = ?, username = ? WHERE user_id = ?",
         (full_name, username, user_id),
     )
     await db.commit()
+    PASSPORT_HASHES.add(passport_hash)
 
 
 @alru_cache(maxsize=1000)

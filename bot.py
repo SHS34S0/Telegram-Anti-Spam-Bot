@@ -62,6 +62,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
         return
     ####################
     u_id = message.from_user.id
+    fl.ACTIVE_USERS.add(u_id)
     username = message.from_user.username  # username може не бути
     user_full_name = message.from_user.full_name
     c_id = message.chat.id
@@ -390,12 +391,21 @@ async def echo_handler(message: Message, bot: Bot) -> None:
 
 
 ####
+async def _flush_loop():
+    """Background task: flush active users to DB every 10 minutes."""
+    while True:
+        await asyncio.sleep(600)
+        await fl.flush_active_users()
+
+
 async def main() -> None:
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
         await db_manager.connect()
         await fl.load_hashes()
         await fl.load_banned_users()
+        await fl.load_passport_cache()
+        asyncio.create_task(_flush_loop())
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(
             bot,

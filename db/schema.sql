@@ -1,9 +1,10 @@
 CREATE TABLE "users_global"
 (
-    "user_id"  INTEGER PRIMARY KEY, -- Telegram ID
-    "name"     TEXT,
-    "username" TEXT,
-    "status"   INTEGER DEFAULT 0 CHECK ("status" IN (0, 1))
+    "user_id"   INTEGER PRIMARY KEY, -- Telegram ID
+    "name"      TEXT,
+    "username"  TEXT,
+    "status"    INTEGER   DEFAULT 0 CHECK ("status" IN (0, 1)),
+    "last_seen" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 );
 
