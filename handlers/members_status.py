@@ -54,7 +54,9 @@ async def track_manual_bans(event: ChatMemberUpdated, bot: Bot):
             logger.warning(
                 f"User {user_banned} was banned in {c_id} {chat_name} by admin {admin_who_banned}, lifespan {lifespan / 60:.1f} min"
             )
-            if lifespan / 60 > 400:  # minutes, is old
+            if (
+                lifespan / 60 > 400 or user_banned in fl.GLOBAL_BANNED
+            ):  # minutes, is old
                 return
 
             await root.user_info(
