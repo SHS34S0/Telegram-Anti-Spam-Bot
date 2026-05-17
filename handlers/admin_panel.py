@@ -49,7 +49,6 @@ async def check_own_groups(db, user_id):
     chat_ids = [
         row[0] for row in rows
     ]  # беремо перший (і єдиний) елемент кожного кортежу
-    print(f"вивід з бази у вигляді списку: {chat_ids}")
     return chat_ids
 
 
@@ -63,7 +62,6 @@ async def check_admin_groups(db, user_id):
     chat_ids = [
         row[0] for row in rows
     ]  # беремо перший (і єдиний) елемент кожного кортежу
-    print(f"вивід з бази у вигляді списку: {chat_ids}")
     return chat_ids
 
 
@@ -128,7 +126,7 @@ async def on_off_buttons(db, bot, chat_ids, feature):
             await db.commit()
             continue
         except Exception as e:
-            print(f"Щось інше {e}")
+            logger.warning(f"Unexpected error in on_off_buttons for chat {id}: {e}")
             continue
     builder.add(
         InlineKeyboardButton(text="Назад", callback_data="my_settings"),

@@ -48,7 +48,7 @@ async def load_banned_users():
         rows = await cursor.fetchall()
         for row in rows:
             GLOBAL_BANNED.add(int(row[0]))
-        print(f"✅ Завантажено {len(GLOBAL_BANNED)} користувачів в чорний список")
+        logger.warning(f"Loaded {len(GLOBAL_BANNED)} users in global blacklist")
 
 
 async def load_hashes():
@@ -61,7 +61,7 @@ async def load_hashes():
         for row in rows:
             hash_text = row[0]
             PHOTO_HASH[imagehash.hex_to_hash(hash_text)] = True
-    print(f"✅ Завантажено {len(PHOTO_HASH)} фото у словник фільтрів.")
+    logger.warning(f"Loaded {len(PHOTO_HASH)} photo hashes")
 
 
 async def load_passport_cache():
@@ -73,7 +73,7 @@ async def load_passport_cache():
         rows = await cursor.fetchall()
         for row in rows:
             PASSPORT_HASHES.add(hash((row[0], row[1], row[2])))
-    print(f"✅ Прогріто {len(PASSPORT_HASHES)} паспортів у кеш")
+    logger.warning(f"Warmed {len(PASSPORT_HASHES)} passport hashes")
 
 
 async def flush_active_users():
@@ -271,7 +271,7 @@ async def get_channel_owner(bot: Bot, channel_id: int):
                 return admin.user.id
 
     except Exception as e:
-        print(f"Помилка {channel_id}: {e}")
+        logger.warning(f"Failed to get admins for chat {channel_id}: {e}")
 
     return None
 
@@ -443,7 +443,7 @@ async def send_remote_log(message, logger_token, admin_id, text):
             async with session.post(url, json=payload) as response:
                 return await response.json()
     except Exception as e:
-        print(f"Помилка відправки через зовнішнього бота: {e}")
+        logger.warning(f"External bot send failed: {e}")
 
 
 async def is_spam(message: str) -> bool:

@@ -48,6 +48,11 @@ def _format_bytes(size: int) -> str:
     return f"{size} Б"
 
 
+def _hit_rate(ci) -> str:
+    total = ci.hits + ci.misses
+    return f"{ci.hits / total * 100:.0f}%" if total else "—"
+
+
 def _get_proc_info() -> dict:
     fields = {"VmRSS", "VmPeak", "VmHWM", "VmSwap", "Threads", "FDSize"}
     result = {}
@@ -92,7 +97,7 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
         if not all_chats:
             return
 
-        print(f"Починаю розбан/розмут юзера {user_id} у {len(all_chats)} чатах...")
+        logger.warning(f"Starting mass unban for user {user_id} in {len(all_chats)} chats")
         for row in all_chats:
             await asyncio.sleep(0.9)
             target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
@@ -105,9 +110,8 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                     user_id=user_id,
                     permissions=full_permissions,
                 )
-                print(f"Розмучено в чаті {target_chat_id}")
             except Exception as e:
-                print(f"restrict не вдалось {target_chat_id}: {e}")
+                logger.warning(f"Restrict failed in chat {target_chat_id}: {e}")
                 if "chat not found" in str(e) or "bot was kicked" in str(e):
                     dead_chat_reason = str(e)
 
@@ -118,9 +122,8 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                     user_id=user_id,
                     only_if_banned=True,
                 )
-                print(f"Розбанено в чаті {target_chat_id}")
             except Exception as e:
-                print(f"unban не вдалось {target_chat_id}: {e}")
+                logger.warning(f"Unban failed in chat {target_chat_id}: {e}")
                 if dead_chat_reason is None and (
                     "chat not found" in str(e) or "bot was kicked" in str(e)
                 ):
@@ -132,10 +135,10 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                     "DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,)
                 )
                 await db.commit()
-                print(f"Видалено чат {target_chat_id} з бази: {dead_chat_reason}")
+                logger.warning(f"Removed dead chat {target_chat_id} from DB: {dead_chat_reason}")
 
     except Exception as e:
-        print(f"Помилка при розблокуванні: {e}")
+        logger.warning(f"Error in mass_unban for user {user_id}: {e}")
 
 
 async def mass_blocking(bot, db, user_id, ignore_chat_id):
@@ -149,23 +152,22 @@ async def mass_blocking(bot, db, user_id, ignore_chat_id):
         if not all_chats:
             return
 
-        print(f"Починаю мас-бан юзера {user_id} у {len(all_chats)} чатах...")
+        logger.warning(f"Starting mass ban for user {user_id} in {len(all_chats)} chats")
         for row in all_chats:
             await asyncio.sleep(0.9)
             target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
             try:
                 await bot.ban_chat_member(chat_id=target_chat_id, user_id=user_id)
-                print(f"Забанено в чаті {target_chat_id}")
             except Exception as e:
-                print(f"Не вдалось забанити в {target_chat_id}: {e}")
+                logger.warning(f"Failed to ban {user_id} in chat {target_chat_id}: {e}")
                 if "chat not found" in str(e) or "bot was kicked" in str(e):
                     await db.execute(
                         "DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,)
                     )
                     await db.commit()
-                    print(f"Видалено чат {target_chat_id} з бази: {str(e)}")
+                    logger.warning(f"Removed dead chat {target_chat_id} from DB: {e}")
     except Exception as e:
-        print(f"Помилка в mass_blocking: {e}")
+        logger.warning(f"Error in mass_blocking for user {user_id}: {e}")
 
 
 def _get_phash_str(bio):
@@ -230,13 +232,13 @@ async def user_info(
             try:
                 await bot.delete_message(chat_id=c_id, message_id=message_id)
             except Exception as e:
-                print(f"Auto-ban: failed to delete message {message_id}: {e}")
+                logger.warning(f"Auto-ban: failed to delete message {message_id}: {e}")
 
         # Ban user in the current chat immediately
         try:
             await bot.ban_chat_member(chat_id=c_id, user_id=u_id)
         except Exception as e:
-            print(f"Auto-ban: failed to ban {u_id} in {c_id}: {e}")
+            logger.warning(f"Auto-ban: failed to ban {u_id} in {c_id}: {e}")
 
         await bot.send_message(
             chat_id=str(config.root),
@@ -313,9 +315,17 @@ async def root_info(message: Message, bot: Bot):
                 "Ручне блокування по ІД",
             )
         if message.text and message.text.lower() == "cache":
+            ci_chat = fl.get_chat_settings.cache_info()
+            ci_msg = fl.msg_count.cache_info()
+            ci_dc = fl.check_dc_number.cache_info()
             await bot.send_message(
                 chat_id=str(config.root),
-                text=f"📊 КЕШ каналів: {fl.get_chat_settings.cache_info()}\n📊 КЕШ учасників: {fl.msg_count.cache_info()}\n📊 КЕШ DC: {fl.check_dc_number.cache_info()}",
+                text=(
+                    f"💾 <b>Кеш (alru_cache):</b>\n\n"
+                    f"  chat_settings: <b>{ci_chat.currsize}</b> / {ci_chat.maxsize} зап. | ⚡ <b>{_hit_rate(ci_chat)}</b> ({ci_chat.hits}↑ {ci_chat.misses}↓)\n"
+                    f"  msg_count: <b>{ci_msg.currsize}</b> / {ci_msg.maxsize} зап. | ⚡ <b>{_hit_rate(ci_msg)}</b> ({ci_msg.hits}↑ {ci_msg.misses}↓)\n"
+                    f"  check_dc: <b>{ci_dc.currsize}</b> / {ci_dc.maxsize} зап. | ⚡ <b>{_hit_rate(ci_dc)}</b> ({ci_dc.hits}↑ {ci_dc.misses}↓)"
+                ),
                 parse_mode="HTML",
             )
         if message.text and message.text.lower() == "chats":
@@ -360,7 +370,8 @@ async def root_info(message: Message, bot: Bot):
                     f"  MSG_HISTORY: <b>{len(fl.MSG_HISTORY)}</b> юз. / <b>{msg_total}</b> пов. — {_format_bytes(asizeof.asizeof(fl.MSG_HISTORY))}\n"
                     f"  REACTION_HISTORY: <b>{len(fl.REACTION_HISTORY)}</b> юз. — {_format_bytes(asizeof.asizeof(fl.REACTION_HISTORY))}\n"
                     f"  SUSPICIOUS_USERS: <b>{len(fl.SUSPICIOUS_USERS)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.SUSPICIOUS_USERS))}\n"
-                    f"  LINKS_HISTORY: <b>{len(fl.LINKS_HISTORY)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.LINKS_HISTORY))}\n\n"
+                    f"  LINKS_HISTORY: <b>{len(fl.LINKS_HISTORY)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.LINKS_HISTORY))}\n"
+                    f"  PASSPORT_HASHES: <b>{len(fl.PASSPORT_HASHES)}</b> зап. — {_format_bytes(asizeof.asizeof(fl.PASSPORT_HASHES))}\n\n"
                     f"💾 <b>Кеш (alru_cache):</b>\n"
                     f"  msg_count: <b>{fl.msg_count.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.msg_count, '_LRUCacheWrapper__cache', {})))}\n"
                     f"  chat_settings: <b>{fl.get_chat_settings.cache_info().currsize}</b> зап. — {_format_bytes(asizeof.asizeof(getattr(fl.get_chat_settings, '_LRUCacheWrapper__cache', {})))}\n"
@@ -453,5 +464,5 @@ async def admin_settings(callback: CallbackQuery, bot: Bot):
             )
 
         except Exception as e:
-            print(f"Помилка оновлення словника: {e}")
+            logger.warning(f"Failed to update photo hash dict: {e}")
             await callback.answer()
