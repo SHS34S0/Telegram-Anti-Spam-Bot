@@ -237,21 +237,30 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                     return
 
         ###################
-        # Запис або оновлення паспорта
-        await fl.register_or_update_passport(u_id, user_full_name, username)
-        # перевірка чи є в базі як підписник каналу ?
-        if not await fl.msg_count(u_id, c_id):
-            await db.execute(
-                """
-                INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date)
-                VALUES (?, ?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id) 
-                        DO
-                UPDATE SET msg_count = msg_count + 1
-                """,
-                (u_id, c_id),
-            )
-            await db.commit()
-            fl.msg_count.cache_invalidate(u_id, c_id)
+        passport_unchanged = await fl.register_or_update_passport(
+            u_id, user_full_name, username
+        )
+        is_new = not await fl.msg_count(u_id, c_id)
+        profile_changed_on_edit = message.edit_date and not passport_unchanged
+        passport_hash = hash((u_id, user_full_name, username))
+
+        if is_new or profile_changed_on_edit:
+            if profile_changed_on_edit:
+                # roll back hash added by register_or_update_passport — re-add only if clean
+                fl.PASSPORT_HASHES.discard(passport_hash)
+
+            if is_new:
+                await db.execute(
+                    """
+                    INSERT INTO chat_stats (user_id, channel_id, msg_count, join_date)
+                    VALUES (?, ?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id, channel_id)
+                            DO
+                    UPDATE SET msg_count = msg_count + 1
+                    """,
+                    (u_id, c_id),
+                )
+                await db.commit()
+                fl.msg_count.cache_invalidate(u_id, c_id)
             dc_number = await fl.check_dc_number(bot, u_id)
             if dc_number == 100:
                 await utils.safe_delete(message)
@@ -357,6 +366,7 @@ async def echo_handler(message: Message, bot: Bot) -> None:
                     f"ПРЕМІУМ\n🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫\n{fl.generate_message_link(message)}\n\n{(text or 'Медіа')[:200]}",
                     message.message_id,
                 )
+            fl.PASSPORT_HASHES.add(passport_hash)
 
         else:
             if text and rus_language == 1:

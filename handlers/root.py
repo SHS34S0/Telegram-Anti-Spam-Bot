@@ -65,7 +65,9 @@ def _get_proc_info() -> dict:
                     # lines with kB: ["VmRSS:", "187432", "kB"]
                     # lines without: ["Threads:", "3"]
                     value = int(parts[1])
-                    result[key] = _format_bytes(value * 1024) if len(parts) == 3 else str(value)
+                    result[key] = (
+                        _format_bytes(value * 1024) if len(parts) == 3 else str(value)
+                    )
     except Exception:
         pass
     return result
@@ -97,7 +99,9 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
         if not all_chats:
             return
 
-        logger.warning(f"Starting mass unban for user {user_id} in {len(all_chats)} chats")
+        logger.warning(
+            f"Starting mass unban for user {user_id} in {len(all_chats)} chats"
+        )
         for row in all_chats:
             await asyncio.sleep(0.9)
             target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
@@ -135,7 +139,9 @@ async def mass_unban(bot, db, user_id, ignore_chat_id):
                     "DELETE FROM chat_links WHERE chat_id = ?", (target_chat_id,)
                 )
                 await db.commit()
-                logger.warning(f"Removed dead chat {target_chat_id} from DB: {dead_chat_reason}")
+                logger.warning(
+                    f"Removed dead chat {target_chat_id} from DB: {dead_chat_reason}"
+                )
 
     except Exception as e:
         logger.warning(f"Error in mass_unban for user {user_id}: {e}")
@@ -152,7 +158,9 @@ async def mass_blocking(bot, db, user_id, ignore_chat_id):
         if not all_chats:
             return
 
-        logger.warning(f"Starting mass ban for user {user_id} in {len(all_chats)} chats")
+        logger.warning(
+            f"Starting mass ban for user {user_id} in {len(all_chats)} chats"
+        )
         for row in all_chats:
             await asyncio.sleep(0.9)
             target_chat_id = row[0]  # rows are tuples like [(123,), (456,)]
@@ -353,7 +361,11 @@ async def root_info(message: Message, bot: Bot):
                 for chats in fl.MSG_HISTORY.values()
                 for msgs in chats.values()
             )
-            swap_line = f"  Swap: <b>{p.get('VmSwap', 'н/д')}</b>\n" if p.get("VmSwap", "0 Б") != "0 Б" else ""
+            swap_line = (
+                f"  Swap: <b>{p.get('VmSwap', 'н/д')}</b>\n"
+                if p.get("VmSwap", "0 Б") != "0 Б"
+                else ""
+            )
             await bot.send_message(
                 chat_id=str(config.root),
                 text=(

@@ -175,10 +175,11 @@ async def check_user_avatar(bot, user_id: int):
     return False
 
 
-async def register_or_update_passport(user_id, full_name, username):
+async def register_or_update_passport(user_id, full_name, username) -> bool:
+    """Returns True if profile unchanged, False if profile data changed."""
     passport_hash = hash((user_id, full_name, username))
     if passport_hash in PASSPORT_HASHES:
-        return  # data unchanged, skip DB write
+        return True  # data unchanged, skip DB write
     db: aiosqlite.Connection = await db_manager.get_db()
     await db.execute(
         "INSERT OR IGNORE INTO users_global (user_id, name, username) VALUES (?, ?, ?)",
@@ -191,6 +192,7 @@ async def register_or_update_passport(user_id, full_name, username):
     )
     await db.commit()
     PASSPORT_HASHES.add(passport_hash)
+    return False
 
 
 @alru_cache(maxsize=1000)
